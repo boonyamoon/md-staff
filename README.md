@@ -26,7 +26,7 @@
 | Flutter | 3.38.x (Dart 3.10) |
 | Android SDK | Platform 34 ขึ้นไป (`flutter doctor` จะบอกถ้ายังขาด) |
 | Xcode | 15 ขึ้นไป สำหรับ build iOS |
-| เครื่องที่รันแอป | iOS 13+ หรือ Android 8.0 (API 26) ขึ้นไป |
+| เครื่องที่รันแอป | iOS 13+ หรือ Android 7.0 (API 24) ขึ้นไป |
 
 โปรเจกต์นี้ **ไม่ใช้ build_runner หรือ codegen** โคลนแล้ว `flutter pub get` แล้วรันได้เลย
 (`json_serializable` resolve กับ Flutter SDK รุ่นนี้ไม่ได้ เพราะชนกับ `test` ที่ SDK pin ไว้
@@ -86,8 +86,8 @@ flutter build ipa --release --dart-define=API_BASE_URL=https://api.meedeepos.com
 ## ทดสอบ
 
 ```sh
-flutter analyze
-flutter test
+flutter analyze   # ไม่มี issue
+flutter test      # 68 tests
 ```
 
 ## โครงสร้างโปรเจกต์
