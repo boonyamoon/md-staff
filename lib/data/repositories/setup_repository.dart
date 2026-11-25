@@ -1,20 +1,17 @@
 import '../../core/network/api_client.dart';
 import '../../core/network/api_failure.dart';
-import '../../core/storage/credential_store.dart';
 import '../dto/json.dart';
 import '../dto/setup_dto.dart';
 
-/// Pairing a handset: the one-time setup a manager does before the phone goes on the floor.
+/// The staff-JWT half of signing in: the password check, then the branches and terminals the
+/// account may use.
 ///
-/// The staff JWT this flow obtains is held in memory by the setup screen and never written to
-/// disk — only the device token pairing returns is stored. Same rule as the kiosk app.
+/// The JWT this returns is held in memory by the sign-in screen and never written to disk — only
+/// the session that SessionRepository.login returns is persisted. Same rule as the kiosk app.
 class SetupRepository {
-  SetupRepository({required ApiClient api, required CredentialStore credentials})
-      : _api = api,
-        _credentials = credentials;
+  SetupRepository({required ApiClient api}) : _api = api;
 
   final ApiClient _api;
-  final CredentialStore _credentials;
 
   /// Signs the setting-up staff member in. Note this hits the ordinary staff `auth/login`, which
   /// answers without the `{success, data}` envelope.
@@ -50,41 +47,5 @@ class SetupRepository {
       staffBearer: staffBearer,
     );
     return envelopeList(body).map(PairingTerminal.fromJson).toList();
-  }
-
-  /// Binds this phone to a STAFF terminal and stores the device token it returns.
-  ///
-  /// `terminalId` null lets the server pick any free handset terminal in the branch.
-  Future<PairResult> pair({
-    required String staffBearer,
-    required String branchId,
-    required String deviceName,
-    required String appVersion,
-    String? terminalId,
-  }) async {
-    final deviceInstallId = await _credentials.deviceInstallId();
-    final body = await _api.post(
-      'api/v1/staff-app/pair',
-      staffBearer: staffBearer,
-      body: {
-        'branch_id': branchId,
-        'device_install_id': deviceInstallId,
-        'device_name': deviceName.trim(),
-        'app_version': appVersion,
-        'terminal_id': ?terminalId,
-      },
-    );
-    final result = PairResult.fromJson(envelopeData(body));
-    await _credentials.savePairing(
-      StoredCredentials(
-        deviceToken: result.deviceToken,
-        terminalId: result.terminalId,
-        terminalCode: result.terminalCode,
-        terminalName: result.terminalName,
-        businessId: result.businessId,
-        branchId: result.branchId,
-      ),
-    );
-    return result;
   }
 }

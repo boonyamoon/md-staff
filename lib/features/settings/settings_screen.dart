@@ -47,7 +47,7 @@ class SettingsScreen extends ConsumerWidget {
     final config = ref.watch(configProvider);
     final version = ref.watch(appVersionProvider);
     final language = ref.watch(languageProvider);
-    final credentials = session.credentials;
+    final staffSession = session.session;
 
     return Scaffold(
       appBar: AppBar(title: Text(t('settings.title'))),
@@ -74,8 +74,8 @@ class SettingsScreen extends ConsumerWidget {
                   _Row(
                     icon: Icons.phone_iphone_rounded,
                     label: t('settings.terminal'),
-                    value: credentials?.terminalName ?? '-',
-                    subtitle: credentials?.terminalCode,
+                    value: staffSession?.terminalName ?? '-',
+                    subtitle: staffSession?.terminalCode,
                   ),
                   const Divider(height: 1),
                   _Row(
@@ -111,42 +111,23 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
+            // One action, not two: because the sign-in also paired the handset, signing out
+            // undoes both — the session is revoked and the phone is free for the next person.
             Card(
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.logout_rounded),
-                    title: Text(t('shift.signOut')),
-                    onTap: () async {
-                      final confirmed = await _confirm(
-                        context,
-                        ref,
-                        title: t('shift.signOut'),
-                        body: t('shift.signOutConfirm'),
-                        action: t('shift.signOut'),
-                      );
-                      if (confirmed) await ref.read(sessionProvider.notifier).signOut();
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.link_off_rounded, color: MeedColors.danger),
-                    title: Text(
-                      t('settings.unpair'),
-                      style: const TextStyle(color: MeedColors.danger),
-                    ),
-                    onTap: () async {
-                      final confirmed = await _confirm(
-                        context,
-                        ref,
-                        title: t('settings.unpair'),
-                        body: t('settings.unpairConfirm'),
-                        action: t('settings.unpair'),
-                      );
-                      if (confirmed) await ref.read(sessionProvider.notifier).unpair();
-                    },
-                  ),
-                ],
+              child: ListTile(
+                leading: const Icon(Icons.logout_rounded, color: MeedColors.danger),
+                title: Text(t('settings.signOut'), style: const TextStyle(color: MeedColors.danger)),
+                subtitle: Text(t('settings.signOutHint')),
+                onTap: () async {
+                  final confirmed = await _confirm(
+                    context,
+                    ref,
+                    title: t('settings.signOut'),
+                    body: t('settings.signOutConfirm'),
+                    action: t('settings.signOut'),
+                  );
+                  if (confirmed) await ref.read(sessionProvider.notifier).signOut();
+                },
               ),
             ),
             const SizedBox(height: 20),

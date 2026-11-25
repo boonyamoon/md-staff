@@ -50,23 +50,38 @@ class TerminalInfo {
       );
 }
 
-/// `POST /api/v1/staff-app/login` — one signed-in shift on this handset.
-class ShiftSession {
-  const ShiftSession({
-    required this.shiftToken,
-    required this.shiftTokenExpiresAt,
+/// What `POST /api/v1/staff-app/login` and `/token/refresh` both answer with.
+///
+/// The sign-in is permanent: there is no expiry on the session itself, only on the access token,
+/// which the app replaces silently. `refreshTokenExpiresAt` is the abandoned-handset cutoff and
+/// rolls forward on every refresh.
+class StaffAppSession {
+  const StaffAppSession({
+    required this.accessToken,
+    required this.accessTokenExpiresAt,
+    required this.refreshToken,
+    required this.refreshTokenExpiresAt,
     required this.staff,
     required this.terminal,
   });
 
-  final String shiftToken;
-  final String shiftTokenExpiresAt;
+  final String accessToken;
+  final DateTime accessTokenExpiresAt;
+  final String refreshToken;
+  final DateTime refreshTokenExpiresAt;
   final StaffProfile staff;
   final TerminalInfo terminal;
 
-  factory ShiftSession.fromJson(Map<String, dynamic> json) => ShiftSession(
-        shiftToken: asString(json['shift_token']),
-        shiftTokenExpiresAt: asString(json['shift_token_expires_at']),
+  factory StaffAppSession.fromJson(Map<String, dynamic> json) => StaffAppSession(
+        accessToken: asString(json['access_token']),
+        // A missing or unparsable expiry is treated as already due, so the app refreshes rather
+        // than sending a token it cannot reason about.
+        accessTokenExpiresAt:
+            DateTime.tryParse(asString(json['access_token_expires_at']))?.toLocal() ?? DateTime.now(),
+        refreshToken: asString(json['refresh_token']),
+        refreshTokenExpiresAt:
+            DateTime.tryParse(asString(json['refresh_token_expires_at']))?.toLocal() ??
+                DateTime.now(),
         staff: StaffProfile.fromJson(asMapOrNull(json['staff']) ?? const {}),
         terminal: TerminalInfo.fromJson(asMapOrNull(json['terminal']) ?? const {}),
       );

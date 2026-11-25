@@ -68,12 +68,12 @@ ProviderScope _host(Widget child, List<dynamic> overrides) => ProviderScope(
     );
 
 void main() {
-  testWidgets('setup opens on the sign-in step and asks for a branch only after login', (tester) async {
+  testWidgets('sign-in opens on the email step and asks for a branch only after that', (tester) async {
     await tester.pumpWidget(
       _host(
         const SetupScreen(),
         [
-          sessionProvider.overrideWith(() => _FakeSession(AppPhase.needsPairing)),
+          sessionProvider.overrideWith(() => _FakeSession(AppPhase.needsLogin)),
           deviceNameProvider.overrideWith((ref) async => 'Pixel 8'),
           appVersionProvider.overrideWith((ref) async => '1.0.0+1'),
         ],
@@ -81,7 +81,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('ตั้งค่าเครื่อง'), findsOneWidget);
+    expect(find.text('เข้าสู่ระบบพนักงาน'), findsOneWidget);
     expect(find.text('อีเมล'), findsOneWidget);
     expect(find.text('รหัสผ่าน'), findsOneWidget);
     // Sign-in stays disabled until both fields are filled, so a blank tap cannot fire a request.
@@ -94,7 +94,7 @@ void main() {
       _host(
         const SetupScreen(),
         [
-          sessionProvider.overrideWith(() => _FakeSession(AppPhase.needsPairing)),
+          sessionProvider.overrideWith(() => _FakeSession(AppPhase.needsLogin)),
           deviceNameProvider.overrideWith((ref) async => 'Pixel 8'),
           appVersionProvider.overrideWith((ref) async => '1.0.0+1'),
         ],

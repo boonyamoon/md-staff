@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../features/bootstrap/session_controller.dart';
 import '../features/bootstrap/splash_screen.dart';
 import '../features/cart/cart_screen.dart';
-import '../features/login/login_screen.dart';
 import '../features/menu/menu_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/setup/setup_screen.dart';
@@ -19,7 +18,6 @@ class AppRoutes {
 
   static const splash = '/';
   static const setup = '/setup';
-  static const login = '/login';
   static const zones = '/zones';
   static const settings = '/settings';
 
@@ -37,8 +35,8 @@ class AppRoutes {
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
-  // One listenable fed by the session phase: pairing, sign-in and the floor are mutually
-  // exclusive, and the redirect below is what enforces that rather than each screen checking.
+  // One listenable fed by the session phase: signing in and the floor are mutually exclusive,
+  // and the redirect below is what enforces that rather than each screen checking.
   final phase = ValueNotifier<AppPhase>(ref.read(sessionProvider).phase);
   ref.listen(sessionProvider, (previous, next) => phase.value = next.phase);
   ref.onDispose(phase.dispose);
@@ -53,20 +51,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       switch (current) {
         case AppPhase.starting:
           return location == AppRoutes.splash ? null : AppRoutes.splash;
-        case AppPhase.needsPairing:
+        case AppPhase.needsLogin:
           return location == AppRoutes.setup ? null : AppRoutes.setup;
-        case AppPhase.needsShift:
-          return location == AppRoutes.login ? null : AppRoutes.login;
         case AppPhase.ready:
-          // A signed-in handset has no business on the splash, setup or sign-in screens.
-          const gated = {AppRoutes.splash, AppRoutes.setup, AppRoutes.login};
+          // A signed-in handset has no business on the splash or the sign-in flow.
+          const gated = {AppRoutes.splash, AppRoutes.setup};
           return gated.contains(location) ? AppRoutes.zones : null;
       }
     },
     routes: [
       GoRoute(path: AppRoutes.splash, builder: (context, state) => const SplashScreen()),
       GoRoute(path: AppRoutes.setup, builder: (context, state) => const SetupScreen()),
-      GoRoute(path: AppRoutes.login, builder: (context, state) => const LoginScreen()),
       GoRoute(
         path: AppRoutes.zones,
         builder: (context, state) => const ZonesScreen(),

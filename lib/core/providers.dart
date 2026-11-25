@@ -7,8 +7,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../data/repositories/floor_repository.dart';
 import '../data/repositories/menu_repository.dart';
+import '../data/repositories/session_repository.dart';
 import '../data/repositories/setup_repository.dart';
-import '../data/repositories/shift_repository.dart';
 import 'network/api_client.dart';
 import 'storage/credential_store.dart';
 
@@ -21,14 +21,11 @@ final apiClientProvider = Provider<ApiClient>((ref) {
 });
 
 final setupRepositoryProvider = Provider<SetupRepository>(
-  (ref) => SetupRepository(
-    api: ref.watch(apiClientProvider),
-    credentials: ref.watch(credentialStoreProvider),
-  ),
+  (ref) => SetupRepository(api: ref.watch(apiClientProvider)),
 );
 
-final shiftRepositoryProvider = Provider<ShiftRepository>(
-  (ref) => ShiftRepository(
+final sessionRepositoryProvider = Provider<SessionRepository>(
+  (ref) => SessionRepository(
     api: ref.watch(apiClientProvider),
     credentials: ref.watch(credentialStoreProvider),
   ),

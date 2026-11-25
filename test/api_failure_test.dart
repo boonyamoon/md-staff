@@ -50,21 +50,37 @@ void main() {
   });
 
   group('classification', () {
-    test('a revoked handset is recognised, and is not read as a shift ending', () {
+    test('an expired access token is a refresh cue, NOT the end of the session', () {
+      const failure = ApiFailure(code: 'STAFF_APP_TOKEN_EXPIRED', message: '');
+      expect(failure.isTokenExpired, isTrue);
+      // The whole point of a permanent sign-in: a lapsed token must never show a login form.
+      expect(failure.endsSession, isFalse);
+    });
+
+    test('a revoked handset ends the session', () {
       const failure = ApiFailure(code: 'STAFF_APP_DEVICE_REVOKED', message: '');
-      expect(failure.isDeviceRevoked, isTrue);
-      expect(failure.isShiftOver, isFalse);
+      expect(failure.endsSession, isTrue);
+      expect(failure.isTokenExpired, isFalse);
     });
 
-    test('an expired shift is recognised, and is not read as an unpaired device', () {
-      const failure = ApiFailure(code: 'STAFF_APP_SHIFT_TOKEN_EXPIRED', message: '');
-      expect(failure.isShiftOver, isTrue);
-      expect(failure.isDeviceRevoked, isFalse);
-    });
-
-    test('a deactivated staff account ends the shift', () {
+    test('a deactivated staff account ends the session', () {
       const failure = ApiFailure(code: 'STAFF_APP_STAFF_REVOKED', message: '');
-      expect(failure.isShiftOver, isTrue);
+      expect(failure.endsSession, isTrue);
+    });
+
+    test('a dead refresh token ends the session', () {
+      for (final code in [
+        'STAFF_APP_REFRESH_TOKEN_INVALID',
+        'STAFF_APP_SESSION_REVOKED',
+        'STAFF_APP_SESSION_EXPIRED',
+      ]) {
+        expect(ApiFailure(code: code, message: '').endsSession, isTrue, reason: code);
+      }
+    });
+
+    test('an app too old for this server ends the session rather than looping', () {
+      const failure = ApiFailure(code: 'STAFF_APP_UPGRADE_REQUIRED', message: '');
+      expect(failure.endsSession, isTrue);
     });
 
     test('a serialisation conflict is worth retrying as-is', () {
@@ -76,8 +92,8 @@ void main() {
       const failure = ApiFailure(code: 'INSUFFICIENT_STOCK', message: '');
       expect(failure.isRetryable, isFalse);
       expect(failure.isClaimConflict, isFalse);
-      expect(failure.isDeviceRevoked, isFalse);
-      expect(failure.isShiftOver, isFalse);
+      expect(failure.endsSession, isFalse);
+      expect(failure.isTokenExpired, isFalse);
     });
   });
 

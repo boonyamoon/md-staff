@@ -8,7 +8,8 @@ import '../../data/dto/setup_dto.dart';
 import '../bootstrap/session_controller.dart';
 import 'setup_controller.dart';
 
-/// Pairing this phone to a branch. Done once, by a manager, before the handset goes on the floor.
+/// The handset's one sign-in: a waiter's own email, then the branch and the terminal. Done once
+/// per phone — the app keeps itself signed in from then on.
 class SetupScreen extends ConsumerStatefulWidget {
   const SetupScreen({super.key});
 
@@ -43,8 +44,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     }
 
     ref.listen(setupControllerProvider, (previous, next) {
-      if (next.paired && !(previous?.paired ?? false)) {
-        ref.read(sessionProvider.notifier).onPaired();
+      final session = next.signedIn;
+      if (session != null && previous?.signedIn == null) {
+        ref.read(sessionProvider.notifier).onSignedIn(session);
       }
     });
 
@@ -95,7 +97,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                         _deviceNameTouched = true;
                         controller.deviceNameChanged(value);
                       },
-                      onPair: controller.pair,
+                      onFinish: controller.finish,
                     ),
                   SetupStep.noBusiness => _DeadEnd(
                       message: t('setup.noBusiness'),
@@ -251,7 +253,7 @@ class _TerminalStep extends StatelessWidget {
     required this.deviceNameController,
     required this.onSelectTerminal,
     required this.onDeviceNameChanged,
-    required this.onPair,
+    required this.onFinish,
   });
 
   final SetupState state;
@@ -259,7 +261,7 @@ class _TerminalStep extends StatelessWidget {
   final TextEditingController deviceNameController;
   final ValueChanged<String?> onSelectTerminal;
   final ValueChanged<String> onDeviceNameChanged;
-  final VoidCallback onPair;
+  final VoidCallback onFinish;
 
   @override
   Widget build(BuildContext context) {
@@ -322,8 +324,8 @@ class _TerminalStep extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
           child: FilledButton(
-            onPressed: state.canPair ? onPair : null,
-            child: Text(t('setup.pair')),
+            onPressed: state.canFinish ? onFinish : null,
+            child: Text(t('setup.finish')),
           ),
         ),
       ],

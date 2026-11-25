@@ -5,40 +5,39 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/network/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/storage/credential_store.dart';
-import '../../data/dto/shift_dto.dart';
+import '../../data/dto/session_dto.dart';
 
-/// Where the app is allowed to be.
+/// Where the app is allowed to be. There are only three, because a handset's sign-in is
+/// permanent: once signed in it stays signed in until someone ends it.
 enum AppPhase {
   /// Reading the keystore. Nothing is decided yet.
   starting,
 
-  /// Never paired, or unpaired since. Only the setup flow is reachable.
-  needsPairing,
-
-  /// Paired, nobody signed in. Only the sign-in screen is reachable.
-  needsShift,
+  /// Never signed in, or signed out since. Only the sign-in flow is reachable.
+  needsLogin,
 
   /// Signed in: the floor, the menu and the cart are reachable.
   ready,
 }
 
 class AppSession {
-  const AppSession({required this.phase, this.credentials, this.notice});
+  const AppSession({required this.phase, this.session, this.notice});
 
   final AppPhase phase;
-  final StoredCredentials? credentials;
+  final StaffSession? session;
 
-  /// A string key to show once on the screen the app lands on — "this device was unpaired", or
-  /// "your shift ended" — so a staff member is told why they were sent back.
+  /// A string key to show once on the screen the app lands on — "this handset was signed out" —
+  /// so a staff member is told why, rather than just finding themselves at a login form.
   final String? notice;
 
-  String? get staffName => credentials?.staffName;
-  bool get canTakeOverTables => credentials?.canTakeOverTables ?? false;
+  String? get staffName => session?.staffName;
+  String? get terminalName => session?.terminalName;
+  String? get terminalCode => session?.terminalCode;
+  bool get canTakeOverTables => session?.canTakeOverTables ?? false;
 
-  AppSession copyWith({AppPhase? phase, StoredCredentials? credentials, String? notice}) =>
-      AppSession(
+  AppSession copyWith({AppPhase? phase, StaffSession? session, String? notice}) => AppSession(
         phase: phase ?? this.phase,
-        credentials: credentials ?? this.credentials,
+        session: session ?? this.session,
         notice: notice,
       );
 }
@@ -47,7 +46,7 @@ final sessionProvider = NotifierProvider<AppSessionController, AppSession>(
   AppSessionController.new,
 );
 
-/// Owns the pairing/shift lifecycle, and is the only thing that decides which part of the app is
+/// Owns the sign-in lifecycle, and is the only thing that decides which part of the app is
 /// reachable. The router reads it; nothing else may change the phase.
 class AppSessionController extends Notifier<AppSession> {
   StreamSubscription<SessionEvent>? _events;
@@ -55,84 +54,51 @@ class AppSessionController extends Notifier<AppSession> {
   @override
   AppSession build() {
     final api = ref.watch(apiClientProvider);
+    // The client refreshes the token on its own; this is how it does it without knowing about
+    // the repository layer.
+    api.attachRefresher(() => ref.read(sessionRepositoryProvider).refresh());
     _events = api.sessionEvents.listen(_onSessionEvent);
     ref.onDispose(() => _events?.cancel());
-    // build() must be synchronous; the keystore read continues in the background and lands on
-    // one of the three decided phases.
+    // build() must be synchronous; the keystore read continues in the background.
     Future.microtask(restore);
     return const AppSession(phase: AppPhase.starting);
   }
 
-  /// Reads what is on the device and decides the phase. Also refreshes the long-lived device
-  /// token, so a handset that stays in the shop never reaches its expiry.
+  /// Reads what is on the device and decides the phase.
+  ///
+  /// Deliberately does NOT call the server: a handset that opens with no signal must still show
+  /// its floor from the token it holds rather than be bounced to a login form. If that token has
+  /// lapsed, the first real request refreshes it, and only a genuine revocation signs the
+  /// handset out.
   Future<void> restore() async {
-    final store = ref.read(credentialStoreProvider);
-    final credentials = await store.load();
-    if (credentials == null) {
-      state = const AppSession(phase: AppPhase.needsPairing);
-      return;
-    }
+    final session = await ref.read(credentialStoreProvider).load();
     state = AppSession(
-      phase: credentials.hasShift ? AppPhase.ready : AppPhase.needsShift,
-      credentials: credentials,
+      phase: session == null ? AppPhase.needsLogin : AppPhase.ready,
+      session: session,
       notice: state.notice,
     );
-    // Best effort: an offline handset must still show its floor from cache rather than be thrown
-    // back to pairing because one refresh call could not reach the server.
-    unawaited(_refreshDeviceTokenQuietly());
   }
 
-  Future<void> _refreshDeviceTokenQuietly() async {
-    try {
-      await ref.read(shiftRepositoryProvider).refreshDeviceToken();
-    } on Object {
-      // A revoked handset arrives as a SessionEvent from the interceptor, handled below.
-    }
+  /// Called by the sign-in flow once the handset is paired and signed in.
+  Future<void> onSignedIn(StaffAppSession _) async {
+    final session = await ref.read(credentialStoreProvider).load();
+    state = AppSession(phase: session == null ? AppPhase.needsLogin : AppPhase.ready, session: session);
   }
 
-  /// Called by the setup flow once pairing succeeded.
-  Future<void> onPaired() async {
-    final credentials = await ref.read(credentialStoreProvider).load();
-    state = AppSession(phase: AppPhase.needsShift, credentials: credentials);
-  }
-
-  /// Called by the sign-in screen once a shift started.
-  Future<void> onShiftStarted(ShiftSession session) async {
-    final credentials = await ref.read(credentialStoreProvider).load();
-    state = AppSession(phase: AppPhase.ready, credentials: credentials);
-  }
-
-  /// Ends the shift, giving back every table this handset holds.
+  /// Signs the handset out: the server revokes the session and releases any tables it holds.
   Future<void> signOut() async {
     try {
-      await ref.read(shiftRepositoryProvider).logout();
+      await ref.read(sessionRepositoryProvider).logout();
     } finally {
-      final credentials = await ref.read(credentialStoreProvider).load();
-      state = AppSession(phase: AppPhase.needsShift, credentials: credentials);
+      state = const AppSession(phase: AppPhase.needsLogin);
     }
-  }
-
-  /// Unpairs the handset. Requires a manager account to set up again, which is the point.
-  Future<void> unpair() async {
-    await ref.read(credentialStoreProvider).clearPairing();
-    state = const AppSession(phase: AppPhase.needsPairing);
   }
 
   void _onSessionEvent(SessionEvent event) {
     switch (event) {
-      case SessionEvent.deviceRevoked:
-        unawaited(ref.read(credentialStoreProvider).clearPairing());
-        state = const AppSession(
-          phase: AppPhase.needsPairing,
-          notice: 'error.deviceRevoked',
-        );
-      case SessionEvent.shiftEnded:
-        unawaited(ref.read(credentialStoreProvider).clearShift());
-        state = AppSession(
-          phase: AppPhase.needsShift,
-          credentials: ref.read(credentialStoreProvider).cached,
-          notice: 'login.shiftEnded',
-        );
+      case SessionEvent.signedOut:
+        unawaited(ref.read(credentialStoreProvider).clear());
+        state = const AppSession(phase: AppPhase.needsLogin, notice: 'login.signedOut');
     }
   }
 
@@ -142,12 +108,12 @@ class AppSessionController extends Notifier<AppSession> {
   }
 }
 
-/// The handset's branch/terminal/printing configuration. Read once per shift.
+/// The handset's branch/terminal/printing configuration. Read once per sign-in.
 final configProvider = FutureProvider<StaffAppConfig>((ref) async {
-  // Re-read whenever the phase changes, so the config never outlives the shift it belongs to.
+  // Re-read whenever the phase changes, so the config never outlives the session it belongs to.
   final session = ref.watch(sessionProvider);
   if (session.phase != AppPhase.ready) {
-    throw StateError('config is only available during a shift');
+    throw StateError('config is only available once signed in');
   }
-  return ref.watch(shiftRepositoryProvider).config();
+  return ref.watch(sessionRepositoryProvider).config();
 });

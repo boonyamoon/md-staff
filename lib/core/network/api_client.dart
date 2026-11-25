@@ -6,26 +6,27 @@ import '../config/app_config.dart';
 import '../storage/credential_store.dart';
 import 'api_failure.dart';
 
-/// Why the app had to leave the screen it was on.
+/// Why the handset had to go back to the sign-in screen.
 enum SessionEvent {
-  /// This handset is no longer paired — back to setup.
-  deviceRevoked,
-
-  /// The shift ended, or the account lost access to this branch — back to sign-in.
-  shiftEnded,
+  /// The session is gone for good: the handset was unpaired, or this staff member may no longer
+  /// use it. Nothing the app can do but ask someone to sign in again.
+  signedOut,
 }
 
 /// One Dio instance for the whole app, with the token rules in one interceptor.
 ///
-/// Which token a request carries is decided by its path, not by the caller:
+/// A handset signs in once and stays signed in, which the app earns by refreshing its own token:
 ///
-///   * `auth/*`, `branches-access/*`, `staff-app/pairing/*`, `staff-app/pair` — the staff JWT,
-///     passed explicitly by the setup flow and never stored (exactly as the kiosk app does it).
-///   * `staff-app/token/refresh`, `staff-app/login` — the device token.
-///   * every other `staff-app/*` path — the shift token.
+///  * **Proactively**, before a request, when under 5 minutes of access-token life is left. Doing
+///    it here rather than waiting for a 401 means a handset that drops off the network still has
+///    most of a token's life to keep retrying in, instead of looking signed out.
+///  * **Single-flight**: concurrent requests await one refresh rather than each starting their
+///    own, so a screen that fires four calls at once does not rotate the token four times.
+///  * **With a 60-second cooldown** after a refresh fails, so a server that is down does not have
+///    every request re-awaiting a failing refresh. Same policy as the iPad POS.
+///  * **Once reactively**, if a request still comes back `STAFF_APP_TOKEN_EXPIRED` — then retried.
 ///
-/// A 401/403 that means "this handset or shift is finished" is turned into a [SessionEvent] so any
-/// screen can react, rather than each call site having to recognise those codes.
+/// Only a revoked device or a revoked staff member ends the session; an expired token never does.
 class ApiClient {
   ApiClient({required CredentialStore credentials, Dio? dio})
       : _credentials = credentials,
@@ -36,7 +37,6 @@ class ApiClient {
       receiveTimeout: const Duration(seconds: 30),
       sendTimeout: const Duration(seconds: 30),
       contentType: Headers.jsonContentType,
-      // Non-2xx is handled below as an ApiFailure, never as a silent success.
       validateStatus: (status) => status != null && status >= 200 && status < 300,
     );
     _dio.interceptors.add(
@@ -48,41 +48,110 @@ class ApiClient {
   final CredentialStore _credentials;
   final _sessionEvents = StreamController<SessionEvent>.broadcast();
 
+  /// Set by [attachRefresher] once the repository that can rotate tokens exists. Kept as a hook
+  /// rather than a dependency so the client does not have to know about the repository layer.
+  Future<bool> Function()? _refresher;
+
+  Future<void>? _inFlightRefresh;
+  DateTime? _lastFailedRefreshAt;
+
+  static const Duration _refreshCooldown = Duration(seconds: 60);
+
   Stream<SessionEvent> get sessionEvents => _sessionEvents.stream;
 
   void dispose() => _sessionEvents.close();
 
-  void _onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    // The setup flow passes the staff JWT itself; never override it.
-    if (options.headers.containsKey('Authorization')) {
+  /// Wires in the thing that can actually rotate the token pair.
+  void attachRefresher(Future<bool> Function() refresher) => _refresher = refresher;
+
+  Future<void> _onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
+    // The sign-in flow passes the staff JWT itself, and the refresh call carries its credential
+    // in the body — neither wants the access token attached.
+    if (options.headers.containsKey('Authorization') || _isRefreshPath(options.path)) {
       handler.next(options);
       return;
     }
-    final path = options.path;
-    final token = _usesDeviceToken(path)
-        ? _credentials.cachedDeviceToken
-        : (_isStaffAppPath(path) ? _credentials.cachedShiftToken : null);
+
+    if (_isStaffAppPath(options.path) && (_credentials.cached?.needsRefresh ?? false)) {
+      await _refreshOnce();
+    }
+
+    final token = _isStaffAppPath(options.path) ? _credentials.cachedAccessToken : null;
     if (token != null && token.isNotEmpty) {
       options.headers['Authorization'] = 'Bearer $token';
     }
     handler.next(options);
   }
 
-  void _onError(DioException error, ErrorInterceptorHandler handler) {
+  Future<void> _onError(DioException error, ErrorInterceptorHandler handler) async {
     final failure = ApiFailure.fromDio(error);
     final status = error.response?.statusCode;
-    if (status == 401 || status == 403) {
-      // Device first: a revoked handset must send the app back to pairing, not to a sign-in
-      // screen it can never get past.
-      if (failure.isDeviceRevoked) {
-        _emit(SessionEvent.deviceRevoked);
-      } else if (failure.isShiftOver) {
-        _emit(SessionEvent.shiftEnded);
+
+    // An expired token is a refresh cue, never a sign-out. Retry the call once behind a refresh.
+    if (status == 401 &&
+        failure.isTokenExpired &&
+        _isStaffAppPath(error.requestOptions.path) &&
+        error.requestOptions.extra['staff_app_retried'] != true) {
+      final refreshed = await _refreshOnce();
+      if (refreshed) {
+        try {
+          final options = error.requestOptions;
+          options.extra = {...options.extra, 'staff_app_retried': true};
+          final token = _credentials.cachedAccessToken;
+          if (token != null && token.isNotEmpty) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
+          handler.resolve(await _dio.fetch<dynamic>(options));
+          return;
+        } on DioException catch (retryError) {
+          handler.reject(_wrap(retryError));
+          return;
+        }
       }
     }
-    handler.reject(
-      DioException(requestOptions: error.requestOptions, error: failure, response: error.response),
-    );
+
+    if ((status == 401 || status == 403) && failure.endsSession) {
+      _emit(SessionEvent.signedOut);
+    }
+    handler.reject(_wrap(error, failure));
+  }
+
+  DioException _wrap(DioException error, [ApiFailure? failure]) => DioException(
+        requestOptions: error.requestOptions,
+        error: failure ?? ApiFailure.fromDio(error),
+        response: error.response,
+      );
+
+  /// Single-flight, cooled down. Returns whether the handset now holds a usable access token.
+  Future<bool> _refreshOnce() async {
+    final refresher = _refresher;
+    if (refresher == null || _credentials.cachedRefreshToken == null) return false;
+
+    final lastFailure = _lastFailedRefreshAt;
+    if (lastFailure != null && DateTime.now().difference(lastFailure) < _refreshCooldown) {
+      return false;
+    }
+
+    final inFlight = _inFlightRefresh;
+    if (inFlight != null) {
+      await inFlight;
+      return !(_credentials.cached?.needsRefresh ?? true);
+    }
+
+    final completer = Completer<void>();
+    _inFlightRefresh = completer.future;
+    var ok = false;
+    try {
+      ok = await refresher();
+      _lastFailedRefreshAt = ok ? null : DateTime.now();
+    } on Object {
+      _lastFailedRefreshAt = DateTime.now();
+      ok = false;
+    } finally {
+      _inFlightRefresh = null;
+      completer.complete();
+    }
+    return ok;
   }
 
   void _emit(SessionEvent event) {
@@ -91,13 +160,9 @@ class ApiClient {
 
   static bool _isStaffAppPath(String path) => path.contains('api/v1/staff-app/');
 
-  static bool _usesDeviceToken(String path) =>
-      path.contains('api/v1/staff-app/token/refresh') || path.contains('api/v1/staff-app/login');
+  static bool _isRefreshPath(String path) => path.contains('api/v1/staff-app/token/refresh');
 
   // ── Verbs ──
-  //
-  // Each returns the decoded body and converts any Dio failure into an [ApiFailure], so callers
-  // only ever have to catch one type.
 
   Future<Map<String, dynamic>> get(
     String path, {
@@ -135,7 +200,6 @@ class ApiClient {
       final response = await request();
       final body = response.data;
       if (body is Map<Object?, Object?>) return Map<String, dynamic>.from(body);
-      // Every endpoint this app calls answers with a JSON object; anything else is a server bug.
       throw const ApiFailure(code: 'MALFORMED_RESPONSE', message: 'Unexpected answer from the server');
     } on DioException catch (error) {
       final inner = error.error;

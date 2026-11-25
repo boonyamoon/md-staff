@@ -20,20 +20,23 @@ class ApiFailure implements Exception {
   bool get isOffline =>
       code == 'NETWORK_UNREACHABLE' || code == 'TIMEOUT' || code == 'CONNECTION_FAILED';
 
-  /// This handset is no longer paired, or was paired to a different terminal. Back to setup.
-  bool get isDeviceRevoked =>
+  /// The access token ran out. A refresh cue, NOT a sign-out: the handset's sign-in is permanent
+  /// and only [endsSession] below means "ask someone to sign in again".
+  bool get isTokenExpired => code == 'STAFF_APP_TOKEN_EXPIRED';
+
+  /// The session is over for good — the handset was unpaired or moved, this staff member may no
+  /// longer use it, or the refresh token is dead. Nothing the app can retry its way out of.
+  bool get endsSession =>
       code == 'STAFF_APP_DEVICE_REVOKED' ||
       code == 'STAFF_APP_DEVICE_TYPE_INVALID' ||
       code == 'STAFF_APP_DEVICE_DISABLED' ||
-      code == 'STAFF_APP_DEVICE_TOKEN_INVALID' ||
-      code == 'STAFF_APP_DEVICE_TOKEN_EXPIRED';
-
-  /// The shift ended or the account lost access. Back to the sign-in screen.
-  bool get isShiftOver =>
-      code == 'STAFF_APP_SHIFT_TOKEN_EXPIRED' ||
-      code == 'STAFF_APP_SHIFT_TOKEN_INVALID' ||
-      code == 'STAFF_APP_SHIFT_TOKEN_REQUIRED' ||
-      code == 'STAFF_APP_STAFF_REVOKED';
+      code == 'STAFF_APP_STAFF_REVOKED' ||
+      code == 'STAFF_APP_SESSION_REVOKED' ||
+      code == 'STAFF_APP_SESSION_EXPIRED' ||
+      code == 'STAFF_APP_REFRESH_TOKEN_INVALID' ||
+      code == 'STAFF_APP_TOKEN_REQUIRED' ||
+      code == 'STAFF_APP_TOKEN_INVALID' ||
+      code == 'STAFF_APP_UPGRADE_REQUIRED';
 
   /// Another handset holds this table, or took it while we were ordering.
   bool get isClaimConflict => code == 'TABLE_CLAIM_HELD' || code == 'TABLE_CLAIM_LOST';

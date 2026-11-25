@@ -10,8 +10,9 @@ class BranchOption {
   final String? businessName;
 }
 
-/// The snapshot, reduced to what the setup screen shows: the branches this account can pair for,
-/// and whether it was POS access (`allow_pos_login`) that filtered them all out.
+/// The snapshot, reduced to what the sign-in screen shows: the branches this account may use a
+/// handset in, and whether it was handset access (`allow_staff_login`, which defaults to false)
+/// that filtered them all out.
 class StaffAppAccess {
   const StaffAppAccess({required this.branches, required this.deniedByPermission});
 

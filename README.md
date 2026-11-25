@@ -7,9 +7,14 @@
 
 ## ความสามารถหลัก
 
-- **ผูกเครื่อง (ครั้งเดียวต่อเครื่อง):** ผู้จัดการเข้าสู่ระบบด้วยอีเมล → เลือกสาขา → เลือกเครื่อง → ผูกเครื่อง
-  เหมือนขั้นตอนตั้งค่าของ `kiosk-kotlin` โดย staff token อยู่แค่ในหน่วยความจำ ไม่เคยเขียนลงดิสก์
-- **เข้ากะด้วยอีเมล:** พนักงานเข้าสู่ระบบด้วยอีเมล/รหัสผ่านเดียวกับที่ใช้กับ POS ได้ shift token อายุ 12 ชั่วโมง
+- **เข้าสู่ระบบครั้งเดียวใช้ได้ตลอด:** พนักงานใส่อีเมล/รหัสผ่านของตัวเอง (ตัวเดียวกับที่ใช้กับ POS)
+  → เลือกสาขา → เลือกเครื่อง → ผูกเครื่องและเข้าใช้งานในขั้นเดียว เหมือน setup ของ `kiosk-kotlin`
+  หลังจากนั้น**ไม่ต้องเข้าสู่ระบบอีก** แอปหมุน refresh token ให้เองเงียบ ๆ
+  staff JWT อยู่แค่ในหน่วยความจำ ไม่เคยเขียนลงดิสก์
+- **1 เครื่อง = 1 คน:** ออเดอร์จึงระบุได้ว่าใครเป็นคนสั่ง session จะจบเมื่อกด "ออกจากระบบ",
+  ถอดการผูกเครื่อง, หรือพนักงานคนนั้นถูก deactivate / ลบ / ล็อก / ถอนออกจากสาขา /
+  ปิดสิทธิ์ `allow_staff_login` — ทั้งหมด**มีผลทันทีที่ request ถัดไป**
+  เพราะเซิร์ฟเวอร์อ่าน `pos_terminals` + `user_staff` ใหม่ทุก request
 - **เลือกโซน → เลือกโต๊ะ → สั่งอาหาร → ดูตะกร้า → ส่งเข้าครัว**
 - **สั่งได้ทีละเครื่อง:** เครื่องที่เปิดโต๊ะจะถือสิทธิ์ (lease 3 นาที ต่ออายุอัตโนมัติทุก 1 นาที)
   เครื่องอื่นเห็นว่า "พนักงาน A กำลังสั่งโต๊ะนี้" และแย่งได้เฉพาะเมื่อใส่ PIN ผู้จัดการ
@@ -27,6 +32,7 @@
 | Android SDK | Platform 34 ขึ้นไป (`flutter doctor` จะบอกถ้ายังขาด) |
 | Xcode | 15 ขึ้นไป สำหรับ build iOS |
 | เครื่องที่รันแอป | iOS 13+ หรือ Android 7.0 (API 24) ขึ้นไป |
+| สิทธิ์พนักงาน | `user_staff.allow_staff_login = true` (ค่า default เป็น `false`) หรือเป็น super admin |
 
 โปรเจกต์นี้ **ไม่ใช้ build_runner หรือ codegen** โคลนแล้ว `flutter pub get` แล้วรันได้เลย
 (`json_serializable` resolve กับ Flutter SDK รุ่นนี้ไม่ได้ เพราะชนกับ `test` ที่ SDK pin ไว้
@@ -72,22 +78,30 @@ flutter build ipa --release --dart-define=API_BASE_URL=https://api.meedeepos.com
 
 ## เริ่มใช้งานเครื่องใหม่
 
-1. ฝั่ง backend: สาขาต้องมี terminal ชนิด **`STAFF`** (สร้างที่ backoffice, `POST /api/v1/pos-terminals`
-   ด้วย `terminal_type: "STAFF"`) หนึ่งเครื่องต่อหนึ่งมือถือ
-2. ตั้งค่า `STAFF_APP_JWT_SECRET` บน `pos-services` (ดู `.env.example` ของ repo นั้น)
+1. ตั้งค่า `STAFF_APP_JWT_SECRET` บน `pos-services` (ดู `.env.example` ของ repo นั้น)
    ถ้าไม่ตั้ง ทุก endpoint `/api/v1/staff-app` จะตอบ `503 STAFF_APP_NOT_CONFIGURED`
-3. บัญชีพนักงานต้องมี `allow_pos_login` (ค่า default เป็น true) และถูก assign เข้าสาขานั้น
-4. เปิดแอป → เข้าสู่ระบบด้วยบัญชีผู้จัดการ → เลือกสาขา → เลือกเครื่อง → ผูกเครื่อง
-5. ส่งมือถือให้พนักงาน แล้วพนักงานเข้ากะด้วยอีเมลของตัวเอง
+2. รัน migration `20261125090000_staff_app_sessions` (เพิ่มคอลัมน์ `allow_staff_login`
+   และตาราง `staff_app_sessions`) — ต้องรันก่อน deploy โค้ด เพราะ `fetchStaffAccess`
+   อ่านคอลัมน์นี้ในเส้นทางของ web และ kiosk ด้วย
+3. สาขาต้องมี terminal ชนิด **`STAFF`** (สร้างที่ backoffice, `POST /api/v1/pos-terminals`
+   ด้วย `terminal_type: "STAFF"`) **หนึ่งเครื่องต่อหนึ่งมือถือ**
+4. เปิดสิทธิ์ให้พนักงานเป็นคน ๆ ไป: `PUT /api/v1/user-staff/:id` ด้วย `allow_staff_login: true`
+   และต้องถูก assign เข้าสาขานั้น (`user_branch_assignments.is_active = true`)
+   — ค่า default เป็น `false` จึงต้องเปิดเอง ส่วน super admin ถูกยกเว้นอยู่แล้ว
+5. ส่งมือถือให้พนักงาน แล้วพนักงานเข้าสู่ระบบด้วยอีเมลตัวเอง **ครั้งเดียว**
+
+> `pos-web` ยังไม่มี checkbox สำหรับ flag กลุ่มนี้ (`allow_kiosk_login` ก็เหมือนกัน)
+> วันนี้จึงต้องเปิดผ่าน API หรือ DB
 
 การ "แย่งโต๊ะ" ใช้ PIN ของพนักงานที่มี `is_super_admin`, `allow_backoffice_login`
 หรือ `allow_manage_app_login` (PIN เดียวกับที่ใช้กับ POS) และ PIN `0000` ใช้ไม่ได้
+— สังเกตว่า `allow_staff_login` **ไม่ได้**ให้สิทธิ์แย่งโต๊ะ มันหมายถึง "ใช้เครื่องพนักงานได้" เท่านั้น
 
 ## ทดสอบ
 
 ```sh
 flutter analyze   # ไม่มี issue
-flutter test      # 68 tests
+flutter test      # 80 tests
 ```
 
 ## โครงสร้างโปรเจกต์
@@ -101,18 +115,17 @@ lib/
 ├── core/
 │   ├── config/        API base URL และค่าคงที่ของ build
 │   ├── network/       dio client, interceptor แนบ token, ApiFailure
-│   ├── storage/       เก็บ token ใน keystore/keychain + device install id
+│   ├── storage/       เก็บ access + refresh token ใน keystore/keychain + device install id
 │   ├── theme/         สี MeeD และธีม
 │   ├── l10n/          ข้อความไทย/อังกฤษ
 │   ├── widgets/       widget ที่ใช้ร่วมกัน
 │   └── providers.dart DI ทั้งหมด (repository, package info, device name)
 ├── data/
 │   ├── dto/           model + fromJson (เขียนมือ) และ CartLine
-│   └── repositories/  setup, shift, floor, menu
+│   └── repositories/  setup, session, floor, menu
 ├── features/
-│   ├── bootstrap/     ตัดสินว่าแอปอยู่สถานะไหน (ผูกเครื่อง / เข้ากะ / พร้อมใช้)
-│   ├── setup/         ผูกเครื่อง
-│   ├── login/         เข้ากะ
+│   ├── bootstrap/     ตัดสินว่าแอปอยู่สถานะไหน (ต้องเข้าสู่ระบบ / พร้อมใช้)
+│   ├── setup/         เข้าสู่ระบบ: อีเมล → สาขา → เครื่อง (ผูกเครื่องในขั้นเดียวกัน)
 │   ├── zones/         เลือกโซน
 │   ├── tables/        เลือกโต๊ะ, สิทธิ์โต๊ะ, แย่งโต๊ะ, บิล
 │   ├── menu/          เมนูและตัวเลือกสินค้า
@@ -133,9 +146,21 @@ lib/
 
 | ชั้น auth | endpoint |
 |---|---|
-| staff JWT (ตอนผูกเครื่อง) | `POST /api/v1/auth/login`, `GET /api/v1/branches-access/snapshot?platform=staff_app`, `GET /api/v1/staff-app/pairing/terminals`, `POST /api/v1/staff-app/pair` |
-| device token | `POST /api/v1/staff-app/token/refresh`, `POST /api/v1/staff-app/login` |
-| shift token | `GET /session`, `POST /logout`, `GET /config`, `GET /zones`, `GET /tables/:id`, `POST /tables/:id/claim`, `POST /tables/:id/claim/renew`, `POST /tables/:id/claim/release`, `POST /tables/:id/orders`, `GET /menu/*` |
+| staff JWT (ตอนเข้าสู่ระบบ อยู่ในหน่วยความจำเท่านั้น) | `POST /api/v1/auth/login`, `GET /api/v1/branches-access/snapshot?platform=staff_app`, `GET /api/v1/staff-app/pairing/terminals`, `POST /api/v1/staff-app/login` |
+| refresh token (อยู่ใน body ไม่มี bearer) | `POST /api/v1/staff-app/token/refresh` |
+| access token | `GET /session`, `POST /logout`, `GET /config`, `GET /zones`, `GET /tables/:id`, `POST /tables/:id/claim`, `POST /tables/:id/claim/renew`, `POST /tables/:id/claim/release`, `POST /tables/:id/orders`, `GET /menu/*` |
+
+`POST /api/v1/staff-app/login` ผูกเครื่อง**และ**ออก token ในขั้นเดียว
+
+เรื่อง token:
+
+- **access token** อายุ 1 ชม. (`STAFF_APP_ACCESS_HOURS`) แอป refresh ล่วงหน้าเมื่อเหลือ ≤ 5 นาที
+  ไม่ใช่รอ 401 — `STAFF_APP_TOKEN_EXPIRED` คือสัญญาณให้ refresh **ไม่ใช่**ให้เด้งไปหน้า login
+- **refresh token** อายุ 180 วัน (`STAFF_APP_REFRESH_DAYS`) หมุนทุกครั้งที่ใช้ และ**ต่ออายุใหม่ทุกครั้ง**
+  เปิดแอปภายใน 180 วันก็ใช้ได้ตลอด เซิร์ฟเวอร์เก็บแค่ sha256 ไม่เก็บตัว token
+- ถ้า response ของ refresh หายกลางทาง แอป retry ด้วย token เดิมได้ภายใน 120 วินาที
+  (`STAFF_APP_REFRESH_GRACE_SECONDS`) จะได้ token ชุดใหม่ ไม่ถูกเตะออก
+  แต่ถ้า token ที่ตายแล้วถูกใช้ซ้ำ 3 ครั้งติด (`STAFF_APP_REPLAY_REVOKE_THRESHOLD`) session จะถูก revoke
 
 การส่งออเดอร์ต้องมี header `X-Claim-Lease` (lease token ของสิทธิ์โต๊ะ) และ `Idempotency-Key`
 (UUID เดียวต่อหนึ่งรอบ ใช้ซ้ำตอน retry — ฝั่งเซิร์ฟเวอร์บันทึกใน `sales_order_commands`
@@ -147,8 +172,9 @@ lib/
 |---|---|
 | `503 STAFF_APP_NOT_CONFIGURED` | ยังไม่ตั้ง `STAFF_APP_JWT_SECRET` บน backend |
 | `NO_STAFF_TERMINAL_AVAILABLE` | สาขานั้นยังไม่มี terminal ชนิด `STAFF` ที่ว่าง |
-| `STAFF_APP_LOGIN_NOT_ALLOWED` | บัญชีนั้นไม่มี `allow_pos_login` หรือไม่ถูก assign เข้าสาขานั้น |
-| เข้าสู่ระบบแล้วเด้งกลับหน้าผูกเครื่อง | เครื่องถูก unpair ที่ backoffice หรือ terminal ถูกปิด |
+| `403 STAFF_APP_LOGIN_NOT_ALLOWED` | บัญชีนั้นยังไม่ได้เปิด `allow_staff_login` หรือไม่ถูก assign เข้าสาขานั้น |
+| เข้าสู่ระบบแล้วเด้งกลับหน้าเข้าสู่ระบบ | เครื่องถูก unpair, terminal ถูกปิด, หรือสิทธิ์พนักงานถูกถอน |
+| `409 STAFF_APP_UPGRADE_REQUIRED` | แอปเวอร์ชันเก่าที่ยังใช้ device token ให้อัปเดตแอป |
 | แตะโต๊ะแล้วขึ้น "มีคนกำลังสั่ง" ทั้งที่ไม่มีใครถือ | lease ยังไม่หมดอายุ (3 นาที) ให้รอ หรือใช้ PIN ผู้จัดการแย่ง |
 | ส่งเข้าครัวแล้วไม่มีใบออเดอร์ออก | สาขาไม่มีเครื่องพิมพ์ ORDER_SLIP/BOTH — ดูที่หน้าตั้งค่าของแอป จะบอกไว้ |
 | เปลี่ยน URL แล้วแอปยังเรียกที่เดิม | URL ฝังตอน build ต้อง build และติดตั้งใหม่ |

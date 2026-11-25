@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/network/api_failure.dart';
 import '../../core/providers.dart';
+import '../../data/dto/session_dto.dart';
 import '../../data/dto/setup_dto.dart';
 
 enum SetupStep {
@@ -29,7 +30,7 @@ class SetupState {
     this.loading = false,
     this.failure,
     this.missingCredentials = false,
-    this.paired = false,
+    this.signedIn,
   });
 
   final SetupStep step;
@@ -45,10 +46,12 @@ class SetupState {
   final bool loading;
   final ApiFailure? failure;
   final bool missingCredentials;
-  final bool paired;
+
+  /// Set once the handset is signed in; the screen hands this to AppSessionController.
+  final StaffAppSession? signedIn;
 
   bool get canLogin => email.contains('@') && password.isNotEmpty && !loading;
-  bool get canPair => selectedBranch != null && deviceName.trim().isNotEmpty && !loading;
+  bool get canFinish => selectedBranch != null && deviceName.trim().isNotEmpty && !loading;
 
   SetupState copyWith({
     SetupStep? step,
@@ -62,7 +65,7 @@ class SetupState {
     bool? loading,
     ApiFailure? failure,
     bool? missingCredentials,
-    bool? paired,
+    StaffAppSession? signedIn,
     bool clearFailure = false,
     bool clearSelectedTerminal = false,
   }) =>
@@ -79,7 +82,7 @@ class SetupState {
         loading: loading ?? this.loading,
         failure: clearFailure ? null : (failure ?? this.failure),
         missingCredentials: missingCredentials ?? this.missingCredentials,
-        paired: paired ?? this.paired,
+        signedIn: signedIn ?? this.signedIn,
       );
 }
 
@@ -87,11 +90,15 @@ final setupControllerProvider = NotifierProvider<SetupController, SetupState>(
   SetupController.new,
 );
 
-/// Drives the one-time pairing flow: sign in → branch → terminal → pair.
+/// Drives the handset's one sign-in: email → branch → terminal → in.
 ///
-/// The staff token lives in this controller only. It is never written to disk and is dropped the
-/// moment pairing succeeds, so a handset on the floor carries no staff credentials — the same rule
-/// the kiosk app's SetupViewModel follows.
+/// A waiter does this once. There is no second "start a shift" step and nothing to repeat
+/// tomorrow — the app keeps itself signed in from here on, and only being signed out or having
+/// handset access removed brings anyone back to this screen.
+///
+/// The staff JWT lives in this controller only. It is never written to disk and is dropped the
+/// moment the session is issued, so a handset on the floor carries no staff credentials — the
+/// same rule the kiosk app's SetupViewModel follows.
 class SetupController extends Notifier<SetupState> {
   String? _staffToken;
 
@@ -180,22 +187,24 @@ class SetupController extends Notifier<SetupState> {
     });
   }
 
-  Future<void> pair() async {
+  /// The last step: pairs the handset and signs in, in one call.
+  Future<void> finish() async {
     final branch = state.selectedBranch;
     final token = _staffToken;
-    if (branch == null || !state.canPair) return;
+    if (branch == null || !state.canFinish) return;
     if (token == null) return _backToLogin();
     await _guard(() async {
       final version = await ref.read(appVersionProvider.future).catchError((_) => '1.0.0');
-      await ref.read(setupRepositoryProvider).pair(
+      final session = await ref.read(sessionRepositoryProvider).login(
             staffBearer: token,
             branchId: branch.id,
             deviceName: state.deviceName,
             appVersion: version,
             terminalId: state.selectedTerminalId,
           );
+      // Nothing on this handset needs the staff JWT again.
       _staffToken = null;
-      state = state.copyWith(paired: true, clearFailure: true);
+      state = state.copyWith(signedIn: session, clearFailure: true);
     });
   }
 
