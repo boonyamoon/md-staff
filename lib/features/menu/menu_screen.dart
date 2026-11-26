@@ -131,31 +131,29 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               ),
             ],
           ),
-          body: SafeArea(
-            child: Column(
-              children: [
-                _CategoryBar(menu: menu, t: t),
-                const Divider(height: 1),
-                Expanded(
-                  child: switch (menu) {
-                    MenuState(loading: true, products: []) => const LoadingView(),
-                    MenuState(failure: final failure?, products: []) => ErrorView(
-                        failure: failure,
-                        retryLabel: t('common.retry'),
-                        onRetry: ref.read(menuProvider.notifier).load,
-                      ),
-                    MenuState(products: []) =>
-                      EmptyView(message: t('menu.empty'), icon: Icons.search_off_rounded),
-                    _ => _ProductList(
-                        menu: menu,
-                        t: t,
-                        scrollController: _scrollController,
-                        onTap: _addProduct,
-                      ),
-                  },
-                ),
-              ],
-            ),
+          body: Column(
+            children: [
+              _CategoryBar(menu: menu, t: t),
+              const Divider(height: 1),
+              Expanded(
+                child: switch (menu) {
+                  MenuState(loading: true, products: []) => const LoadingView(),
+                  MenuState(failure: final failure?, products: []) => ErrorView(
+                      failure: failure,
+                      retryLabel: t('common.retry'),
+                      onRetry: ref.read(menuProvider.notifier).load,
+                    ),
+                  MenuState(products: []) =>
+                    EmptyView(message: t('menu.empty'), icon: Icons.search_off_rounded),
+                  _ => _ProductList(
+                      menu: menu,
+                      t: t,
+                      scrollController: _scrollController,
+                      onTap: _addProduct,
+                    ),
+                },
+              ),
+            ],
           ),
           bottomNavigationBar: table.cart.isEmpty
               ? null
@@ -215,23 +213,28 @@ class _CategoryChip extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(right: 8),
         child: Material(
-          color: selected ? MeedColors.brand : MeedColors.card,
+          color: selected ? Theme.of(context).colorScheme.primary : MeedColors.card,
           borderRadius: BorderRadius.circular(20),
           child: InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(20),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              // The bar fixes the capsule's height, so the label is centred in it rather than
+              // pushed down by vertical padding — which left no room for Thai vowel marks.
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: selected ? MeedColors.brand : MeedColors.line),
+                border: Border.all(color: selected ? Theme.of(context).colorScheme.primary : MeedColors.line),
               ),
               child: Text(
                 label,
                 style: TextStyle(
                   fontSize: 14.5,
                   fontWeight: FontWeight.w600,
-                  color: selected ? Colors.white : MeedColors.ink,
+                  height: 1.3,
+                  leadingDistribution: TextLeadingDistribution.even,
+                  color: selected ? Theme.of(context).colorScheme.onPrimary : MeedColors.ink,
                 ),
               ),
             ),
@@ -256,7 +259,10 @@ class _ProductList extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListView.separated(
         controller: scrollController,
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+        // The list runs to the bottom edge, under the home indicator; the inset is added to the
+        // scroll padding so the last product can still be scrolled clear of it. It is zero while
+        // the cart bar is showing, which takes that space itself.
+        padding: EdgeInsets.fromLTRB(16, 12, 16, 20 + MediaQuery.paddingOf(context).bottom),
         itemCount: menu.products.length + (menu.loadingMore ? 1 : 0),
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
@@ -310,10 +316,10 @@ class _ProductRow extends StatelessWidget {
                         children: [
                           Text(
                             t.money(price),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
-                              color: MeedColors.brandDark,
+                              color: Theme.of(context).colorScheme.primaryStrong,
                             ),
                           ),
                           if (product.hasMultipleSkus)
@@ -339,7 +345,7 @@ class _ProductRow extends StatelessWidget {
                 ),
                 Icon(
                   product.needsChoices ? Icons.tune_rounded : Icons.add_circle_outline_rounded,
-                  color: soldOut ? MeedColors.line : MeedColors.brand,
+                  color: soldOut ? MeedColors.line : Theme.of(context).colorScheme.primary,
                 ),
               ],
             ),

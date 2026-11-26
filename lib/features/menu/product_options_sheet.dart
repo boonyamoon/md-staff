@@ -325,7 +325,7 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-        color: selected ? MeedColors.brand : MeedColors.card,
+        color: selected ? Theme.of(context).colorScheme.primary : MeedColors.card,
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
           onTap: onTap,
@@ -334,14 +334,14 @@ class _Chip extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: selected ? MeedColors.brand : MeedColors.line),
+              border: Border.all(color: selected ? Theme.of(context).colorScheme.primary : MeedColors.line),
             ),
             child: Text(
               label,
               style: TextStyle(
                 fontSize: 14.5,
                 fontWeight: FontWeight.w600,
-                color: selected ? Colors.white : MeedColors.ink,
+                color: selected ? Theme.of(context).colorScheme.onPrimary : MeedColors.ink,
               ),
             ),
           ),

@@ -201,6 +201,7 @@ class SetupController extends Notifier<SetupState> {
             deviceName: state.deviceName,
             appVersion: version,
             terminalId: state.selectedTerminalId,
+            themeColor: branch.themeColor,
           );
       // Nothing on this handset needs the staff JWT again.
       _staffToken = null;

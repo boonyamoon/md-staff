@@ -23,6 +23,7 @@ class SessionRepository {
     required String deviceName,
     required String appVersion,
     String? terminalId,
+    String? themeColor,
   }) async {
     final deviceInstallId = await _credentials.deviceInstallId();
     final body = await _api.post(
@@ -37,7 +38,7 @@ class SessionRepository {
       },
     );
     final session = StaffAppSession.fromJson(envelopeData(body));
-    await _persist(session);
+    await _persist(session, themeColor: themeColor);
     return session;
   }
 
@@ -89,7 +90,7 @@ class SessionRepository {
     return StaffAppSessionState.fromJson(envelopeData(body));
   }
 
-  Future<void> _persist(StaffAppSession session) => _credentials.save(
+  Future<void> _persist(StaffAppSession session, {String? themeColor}) => _credentials.save(
         StaffSession(
           accessToken: session.accessToken,
           accessTokenExpiresAt: session.accessTokenExpiresAt,
@@ -102,6 +103,7 @@ class SessionRepository {
           staffId: session.staff.staffId,
           staffName: session.staff.staffName,
           canTakeOverTables: session.staff.canTakeOverTables,
+          themeColor: themeColor,
         ),
       );
 }

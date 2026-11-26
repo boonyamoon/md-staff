@@ -17,6 +17,7 @@ class StaffSession {
     required this.staffId,
     required this.staffName,
     this.canTakeOverTables = false,
+    this.themeColor,
   });
 
   /// Sent as the bearer. Short-lived and replaced silently; never the thing that keeps the
@@ -35,6 +36,9 @@ class StaffSession {
   final String staffId;
   final String staffName;
   final bool canTakeOverTables;
+
+  /// The branch's `theme_color`, kept from sign-in so the app wears it again after a restart.
+  final String? themeColor;
 
   /// Refresh when under this much life is left, rather than waiting for a 401 — the same
   /// 5-minute buffer the iPad POS uses. A handset in a dead-signal spot then has the rest of the
@@ -64,6 +68,23 @@ class StaffSession {
         staffId: staffId ?? this.staffId,
         staffName: staffName ?? this.staffName,
         canTakeOverTables: canTakeOverTables ?? this.canTakeOverTables,
+        themeColor: themeColor,
+      );
+
+  /// Separate from [copyWith] because null is a real value here: the branch has no colour.
+  StaffSession withThemeColor(String? color) => StaffSession(
+        accessToken: accessToken,
+        accessTokenExpiresAt: accessTokenExpiresAt,
+        refreshToken: refreshToken,
+        terminalId: terminalId,
+        terminalCode: terminalCode,
+        terminalName: terminalName,
+        businessId: businessId,
+        branchId: branchId,
+        staffId: staffId,
+        staffName: staffName,
+        canTakeOverTables: canTakeOverTables,
+        themeColor: color,
       );
 }
 
@@ -115,6 +136,7 @@ class CredentialStore {
       staffId: all[_kStaffId] ?? '',
       staffName: all[_kStaffName] ?? '',
       canTakeOverTables: all[_kCanTakeOver] == 'true',
+      themeColor: all[_kThemeColor],
     );
     return _cached;
   }
@@ -132,6 +154,8 @@ class CredentialStore {
       _storage.write(key: _kStaffId, value: session.staffId),
       _storage.write(key: _kStaffName, value: session.staffName),
       _storage.write(key: _kCanTakeOver, value: session.canTakeOverTables.toString()),
+      // A null value removes the key, so a previous branch's colour does not linger.
+      _storage.write(key: _kThemeColor, value: session.themeColor),
     ]);
     _cached = session;
     _loaded = true;
@@ -155,6 +179,17 @@ class CredentialStore {
       staffName: staffName,
       canTakeOverTables: canTakeOverTables,
     ));
+  }
+
+  /// Remembers the colour `staff-app/config` reported, for the next launch. Writes that one key
+  /// only: rewriting the whole session here could put back a token a refresh had just rotated.
+  /// Ignored when [branchId] is no longer the signed-in branch.
+  Future<void> saveThemeColor({required String branchId, required String? color}) async {
+    final current = _cached;
+    if (current == null || current.branchId != branchId || current.themeColor == color) return;
+    await _storage.write(key: _kThemeColor, value: color);
+    final latest = _cached;
+    if (latest != null && latest.branchId == branchId) _cached = latest.withThemeColor(color);
   }
 
   /// Signing out for good. The device install id is deliberately kept: signing back in on the
@@ -190,5 +225,6 @@ class CredentialStore {
   static const _kStaffId = 'staff_id';
   static const _kStaffName = 'staff_name';
   static const _kCanTakeOver = 'can_take_over_tables';
+  static const _kThemeColor = 'branch_theme_color';
   static const _kDeviceInstallId = 'device_install_id';
 }

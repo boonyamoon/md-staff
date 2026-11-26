@@ -77,7 +77,7 @@ class _Button extends StatelessWidget {
           child: Icon(
             icon,
             size: 20,
-            color: onTap == null ? MeedColors.line : MeedColors.brand,
+            color: onTap == null ? MeedColors.line : Theme.of(context).colorScheme.primary,
           ),
         ),
       );

@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 class MeedColors {
   const MeedColors._();
 
-  static const Color brand = Color(0xFF1C7C54);
-  static const Color brandDark = Color(0xFF145C3E);
+  /// Used until a branch's own `theme_color` is known, and when it has none. Widgets read the
+  /// colour in force from `Theme.of(context).colorScheme.primary`, never from here.
+  static const Color defaultPrimary = Color(0xFFFF471A);
   static const Color accent = Color(0xFFF2A541);
   static const Color danger = Color(0xFFC0392B);
   static const Color surface = Color(0xFFF6F7F5);
@@ -17,17 +18,42 @@ class MeedColors {
   /// Table states on the floor grid.
   static const Color tableFree = Color(0xFFEFF5F2);
   static const Color tableBusy = Color(0xFFFDF2E3);
-  static const Color tableMine = Color(0xFFDFF1E7);
   static const Color tableLocked = Color(0xFFF2E6E6);
   static const Color tableDisabled = Color(0xFFECECEC);
 }
 
+/// A `#RRGGBB` (or `AARRGGBB`) string as a colour, or null when it is not one.
+Color? colorFromHex(String? hex) {
+  final cleaned = (hex ?? '').trim().replaceFirst('#', '');
+  if (!RegExp(r'^([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$').hasMatch(cleaned)) return null;
+  final value = int.parse(cleaned, radix: 16);
+  return Color(cleaned.length == 6 ? 0xFF000000 | value : value);
+}
+
+/// A branch's `theme_color` as the app's primary: always opaque, and the default when unusable.
+Color themeColorFrom(String? hex) =>
+    colorFromHex(hex)?.withValues(alpha: 1) ?? MeedColors.defaultPrimary;
+
+/// The shades derived from whatever the primary colour currently is.
+extension PrimaryShades on ColorScheme {
+  /// For text in the primary hue on a light background.
+  Color get primaryStrong => Color.lerp(primary, Colors.black, 0.28)!;
+
+  /// A pale fill: a selected card, a table this handset holds.
+  Color get primaryTint => Color.alphaBlend(primary.withValues(alpha: 0.12), MeedColors.card);
+}
+
 /// One light theme. The app is a working tool held at arm's length in a dim dining room: large
 /// touch targets, strong contrast, no dark variant to go wrong under shop lighting.
-ThemeData buildAppTheme() {
+ThemeData buildAppTheme([Color primary = MeedColors.defaultPrimary]) {
+  // A shop may pick any colour, including a pale one that white text would vanish on.
+  final onPrimary = ThemeData.estimateBrightnessForColor(primary) == Brightness.dark
+      ? Colors.white
+      : MeedColors.ink;
   final scheme = ColorScheme.fromSeed(
-    seedColor: MeedColors.brand,
-    primary: MeedColors.brand,
+    seedColor: primary,
+    primary: primary,
+    onPrimary: onPrimary,
     surface: MeedColors.card,
   );
 
@@ -84,7 +110,7 @@ ThemeData buildAppTheme() {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: MeedColors.brand, width: 2),
+        borderSide: BorderSide(color: primary, width: 2),
       ),
     ),
     snackBarTheme: const SnackBarThemeData(

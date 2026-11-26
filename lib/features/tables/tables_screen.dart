@@ -26,23 +26,21 @@ class TablesScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text(zone?.zoneName ?? t('tables.title'))),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () => ref.read(zonesProvider.notifier).refresh(),
-          child: switch (zones) {
-            AsyncError(:final error) => ErrorView(
-                failure: error is ApiFailure
-                    ? error
-                    : ApiFailure(code: 'UNKNOWN', message: error.toString()),
-                retryLabel: t('common.retry'),
-                onRetry: () => ref.read(zonesProvider.notifier).refresh(),
-              ),
-            AsyncLoading() when zone == null => const LoadingView(),
-            _ when zone == null || zone.tables.isEmpty =>
-              EmptyView(message: t('tables.empty'), icon: Icons.table_bar_outlined),
-            _ => _TableGrid(zone: zone, t: t),
-          },
-        ),
+      body: RefreshIndicator(
+        onRefresh: () => ref.read(zonesProvider.notifier).refresh(),
+        child: switch (zones) {
+          AsyncError(:final error) => ErrorView(
+              failure: error is ApiFailure
+                  ? error
+                  : ApiFailure(code: 'UNKNOWN', message: error.toString()),
+              retryLabel: t('common.retry'),
+              onRetry: () => ref.read(zonesProvider.notifier).refresh(),
+            ),
+          AsyncLoading() when zone == null => const LoadingView(),
+          _ when zone == null || zone.tables.isEmpty =>
+            EmptyView(message: t('tables.empty'), icon: Icons.table_bar_outlined),
+          _ => _TableGrid(zone: zone, t: t),
+        },
       ),
     );
   }
@@ -88,7 +86,7 @@ class _TableGrid extends ConsumerWidget {
     }
     final failure = state.failure;
     if (failure != null) {
-      _toast(context, failure.message);
+      _toast(context, ref.read(stringsProvider).failure(failure));
       ref.read(activeTableProvider.notifier).acknowledgeFailure();
     }
   }
@@ -98,7 +96,9 @@ class _TableGrid extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => GridView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        // The grid runs to the bottom edge, under the home indicator; the inset is added to the
+        // scroll padding so the last row can still be scrolled clear of it.
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 28 + MediaQuery.paddingOf(context).bottom),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           // Two columns on a phone held in portrait: a table tile has to carry a label, a state
           // and a total, and three columns leaves no room for the holder's name.
@@ -128,7 +128,7 @@ class _TableTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (background, border, statusLabel, statusColor) = _appearance();
+    final (background, border, statusLabel, statusColor) = _appearance(Theme.of(context).colorScheme);
     final session = table.session;
 
     return Material(
@@ -201,12 +201,12 @@ class _TableTile extends StatelessWidget {
     );
   }
 
-  (Color, Color, String, Color) _appearance() {
+  (Color, Color, String, Color) _appearance(ColorScheme scheme) {
     if (table.isOutOfService) {
       return (MeedColors.tableDisabled, MeedColors.line, t('tables.outOfService'), MeedColors.inkSoft);
     }
     if (table.isHeldByMe) {
-      return (MeedColors.tableMine, MeedColors.brand, t('tables.heldByMe'), MeedColors.brandDark);
+      return (scheme.primaryTint, scheme.primary, t('tables.heldByMe'), scheme.primaryStrong);
     }
     if (table.isHeldByOther) {
       return (MeedColors.tableLocked, MeedColors.danger, t('tables.heldBy'), MeedColors.danger);

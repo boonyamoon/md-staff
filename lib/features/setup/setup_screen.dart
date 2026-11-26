@@ -143,7 +143,7 @@ class _LoginStep extends StatelessWidget {
   Widget build(BuildContext context) => ListView(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
         children: [
-          const Icon(Icons.phone_iphone_rounded, size: 56, color: MeedColors.brand),
+          Icon(Icons.phone_iphone_rounded, size: 56, color: Theme.of(context).colorScheme.primary),
           const SizedBox(height: 16),
           Text(
             t('setup.intro'),
@@ -177,7 +177,7 @@ class _LoginStep extends StatelessWidget {
           ],
           if (state.failure != null) ...[
             const SizedBox(height: 10),
-            _FailureText(message: state.failure!.message),
+            _FailureText(message: t.failure(state.failure!)),
           ],
           const SizedBox(height: 24),
           FilledButton(
@@ -233,7 +233,7 @@ class _BranchStep extends StatelessWidget {
           if (state.failure != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: _FailureText(message: state.failure!.message),
+              child: _FailureText(message: t.failure(state.failure!)),
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
@@ -319,7 +319,7 @@ class _TerminalStep extends StatelessWidget {
         if (state.failure != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: _FailureText(message: state.failure!.message),
+            child: _FailureText(message: t.failure(state.failure!)),
           ),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
@@ -352,7 +352,7 @@ class _ChoiceCard extends StatelessWidget {
   Widget build(BuildContext context) => Opacity(
         opacity: enabled ? 1 : 0.5,
         child: Material(
-          color: selected ? MeedColors.tableMine : MeedColors.card,
+          color: selected ? Theme.of(context).colorScheme.primaryTint : MeedColors.card,
           borderRadius: BorderRadius.circular(14),
           child: InkWell(
             onTap: enabled ? onTap : null,
@@ -362,7 +362,7 @@ class _ChoiceCard extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: selected ? MeedColors.brand : MeedColors.line,
+                  color: selected ? Theme.of(context).colorScheme.primary : MeedColors.line,
                   width: selected ? 2 : 1,
                 ),
               ),
@@ -387,7 +387,7 @@ class _ChoiceCard extends StatelessWidget {
                     ),
                   ),
                   if (selected)
-                    const Icon(Icons.check_circle_rounded, color: MeedColors.brand),
+                    Icon(Icons.check_circle_rounded, color: Theme.of(context).colorScheme.primary),
                 ],
               ),
             ),

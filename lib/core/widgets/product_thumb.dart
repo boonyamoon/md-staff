@@ -18,7 +18,7 @@ class ProductThumb extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: MeedColors.tableFree,
+        color: Theme.of(context).colorScheme.primaryTint,
         borderRadius: BorderRadius.circular(radius),
       ),
       child: Icon(Icons.restaurant_rounded, size: size * 0.45, color: MeedColors.inkSoft),

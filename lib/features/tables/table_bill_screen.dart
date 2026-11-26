@@ -223,7 +223,10 @@ class _KitchenBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (background, foreground) = switch (status.toUpperCase()) {
-      'READY' => (MeedColors.tableMine, MeedColors.brandDark),
+      'READY' => (
+          Theme.of(context).colorScheme.primaryTint,
+          Theme.of(context).colorScheme.primaryStrong,
+        ),
       'SERVED' => (MeedColors.tableFree, MeedColors.inkSoft),
       'PREPARING' => (MeedColors.tableBusy, const Color(0xFF7D5A1E)),
       'CANCELLED' => (MeedColors.tableLocked, MeedColors.danger),

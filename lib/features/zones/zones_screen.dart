@@ -31,45 +31,43 @@ class ZonesScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            if (session.staffName != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-                child: Row(
-                  children: [
-                    const Icon(Icons.person_outline_rounded, size: 18, color: MeedColors.inkSoft),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        session.staffName!,
-                        style: const TextStyle(color: MeedColors.inkSoft, fontSize: 14),
-                      ),
+      body: Column(
+        children: [
+          if (session.staffName != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+              child: Row(
+                children: [
+                  const Icon(Icons.person_outline_rounded, size: 18, color: MeedColors.inkSoft),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      session.staffName!,
+                      style: const TextStyle(color: MeedColors.inkSoft, fontSize: 14),
                     ),
-                  ],
-                ),
-              ),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () => ref.read(zonesProvider.notifier).refresh(),
-                child: switch (zones) {
-                  AsyncError(:final error) => ErrorView(
-                      failure: error is ApiFailure
-                          ? error
-                          : ApiFailure(code: 'UNKNOWN', message: error.toString()),
-                      retryLabel: t('common.retry'),
-                      onRetry: () => ref.read(zonesProvider.notifier).refresh(),
-                    ),
-                  AsyncData(:final value) when value.isEmpty =>
-                    EmptyView(message: t('zones.empty'), icon: Icons.table_restaurant_outlined),
-                  AsyncData(:final value) => _ZoneList(zones: value, t: t),
-                  _ => const LoadingView(),
-                },
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () => ref.read(zonesProvider.notifier).refresh(),
+              child: switch (zones) {
+                AsyncError(:final error) => ErrorView(
+                    failure: error is ApiFailure
+                        ? error
+                        : ApiFailure(code: 'UNKNOWN', message: error.toString()),
+                    retryLabel: t('common.retry'),
+                    onRetry: () => ref.read(zonesProvider.notifier).refresh(),
+                  ),
+                AsyncData(:final value) when value.isEmpty =>
+                  EmptyView(message: t('zones.empty'), icon: Icons.table_restaurant_outlined),
+                AsyncData(:final value) => _ZoneList(zones: value, t: t),
+                _ => const LoadingView(),
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -83,7 +81,9 @@ class _ZoneList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        // The list runs to the bottom edge, under the home indicator; the inset is added to the
+        // scroll padding so the last card can still be scrolled clear of it.
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 28 + MediaQuery.paddingOf(context).bottom),
         itemCount: zones.length,
         separatorBuilder: (_, _) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
@@ -101,7 +101,7 @@ class _ZoneList extends StatelessWidget {
                       width: 10,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: _zoneColor(zone.colorHex),
+                        color: colorFromHex(zone.colorHex) ?? Theme.of(context).colorScheme.primary,
                         borderRadius: BorderRadius.circular(5),
                       ),
                     ),
@@ -125,9 +125,9 @@ class _ZoneList extends StatelessWidget {
                             const SizedBox(height: 6),
                             Text(
                               '$mine · ${t('tables.heldByMe')}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 13.5,
-                                color: MeedColors.brand,
+                                color: Theme.of(context).colorScheme.primary,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -143,12 +143,4 @@ class _ZoneList extends StatelessWidget {
           );
         },
       );
-
-  static Color _zoneColor(String? hex) {
-    if (hex == null || hex.isEmpty) return MeedColors.brand;
-    final cleaned = hex.replaceFirst('#', '');
-    final value = int.tryParse(cleaned, radix: 16);
-    if (value == null) return MeedColors.brand;
-    return Color(cleaned.length <= 6 ? 0xFF000000 | value : value);
-  }
 }

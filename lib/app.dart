@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/l10n/strings.dart';
 import 'core/theme/app_theme.dart';
+import 'features/bootstrap/theme_color_provider.dart';
 import 'router/app_router.dart';
 
 class MdStaffApp extends ConsumerWidget {
@@ -16,9 +18,12 @@ class MdStaffApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'MeeD Staff',
       debugShowCheckedModeBanner: false,
-      theme: buildAppTheme(),
+      theme: buildAppTheme(ref.watch(themeColorProvider)),
       routerConfig: router,
       locale: language.locale,
+      // Without these, Material only knows en-US and every widget that needs
+      // MaterialLocalizations (TextField, dialogs, tooltips…) throws under the Thai locale.
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       supportedLocales: AppLanguage.values.map((l) => l.locale).toList(),
       builder: (context, child) => MediaQuery.withClampedTextScaling(
         // A handset is read at arm's length in a dim room, so the app's own type is already

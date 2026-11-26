@@ -100,6 +100,8 @@ class BranchConfig {
     this.taxIncluded = true,
     this.serviceChargeRate = 0,
     this.timeZone = 'Asia/Bangkok',
+    this.themeColor,
+    this.reportsThemeColor = false,
   });
 
   final String businessId;
@@ -114,6 +116,13 @@ class BranchConfig {
   final num serviceChargeRate;
   final String timeZone;
 
+  /// `#RRGGBB`, or null when the branch has none.
+  final String? themeColor;
+
+  /// Whether the server sent `theme_color` at all. A server without the field says nothing about
+  /// the colour, which must not be read as "this branch has none".
+  final bool reportsThemeColor;
+
   factory BranchConfig.fromJson(Map<String, dynamic> json) => BranchConfig(
         businessId: asString(json['business_id']),
         branchId: asString(json['branch_id']),
@@ -126,6 +135,8 @@ class BranchConfig {
         taxIncluded: asBool(json['tax_included'], fallback: true),
         serviceChargeRate: asNum(json['service_charge_rate']),
         timeZone: asString(json['time_zone'], fallback: 'Asia/Bangkok'),
+        themeColor: asStringOrNull(json['theme_color']),
+        reportsThemeColor: json.containsKey('theme_color'),
       );
 }
 

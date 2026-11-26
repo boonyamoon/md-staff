@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/strings.dart';
 import '../network/api_failure.dart';
 import '../theme/app_theme.dart';
 
@@ -25,7 +27,7 @@ class LoadingView extends StatelessWidget {
 
 /// Shown instead of a screen's content when the first load failed. Phrased from the failure's own
 /// message, which the API writes for staff rather than for developers.
-class ErrorView extends StatelessWidget {
+class ErrorView extends ConsumerWidget {
   const ErrorView({
     super.key,
     required this.failure,
@@ -38,7 +40,7 @@ class ErrorView extends StatelessWidget {
   final String? retryLabel;
 
   @override
-  Widget build(BuildContext context) => Center(
+  Widget build(BuildContext context, WidgetRef ref) => Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -51,7 +53,7 @@ class ErrorView extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                failure.message,
+                ref.watch(stringsProvider).failure(failure),
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 16, color: MeedColors.ink),
               ),

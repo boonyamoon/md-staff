@@ -3,11 +3,14 @@ import 'json.dart';
 /// A branch this account may set a handset up for, from
 /// `GET /api/v1/branches-access/snapshot?platform=staff_app`.
 class BranchOption {
-  const BranchOption({required this.id, required this.name, this.businessName});
+  const BranchOption({required this.id, required this.name, this.businessName, this.themeColor});
 
   final String id;
   final String name;
   final String? businessName;
+
+  /// The branch's `theme_color` as the server sent it (`#RRGGBB`), or null when it has none.
+  final String? themeColor;
 }
 
 /// The snapshot, reduced to what the sign-in screen shows: the branches this account may use a
@@ -35,6 +38,7 @@ class StaffAppAccess {
             id: asString(b['id']),
             name: asStringOrNull(b['branch_name']) ?? asString(b['id']),
             businessName: businessNames[asString(b['business_id'])],
+            themeColor: asStringOrNull(b['theme_color']),
           ),
     ]..sort((a, b) {
       final byBusiness = (a.businessName ?? '').compareTo(b.businessName ?? '');

@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../network/api_failure.dart';
+
 /// Thai and English, Thai first — the same two languages, in the same order of priority, as the
 /// POS, the kiosk and the customer QR app. Kept as a plain map rather than ARB/gen-l10n so the
 /// whole app's copy is readable in one file; there are only a few dozen strings.
@@ -43,6 +45,23 @@ class AppStrings {
   String call(String key) {
     final table = language == AppLanguage.en ? _en : _th;
     return table[key] ?? _th[key] ?? key;
+  }
+
+  /// The text to show staff for a failed call. The server's own `message` is English and, for a
+  /// missing endpoint, a developer-facing "Route not found" — so the cases the app can recognise
+  /// are phrased here, in the current language, and only an unrecognised one falls back to what
+  /// the server said.
+  String failure(ApiFailure failure) {
+    if (failure.isOffline) return call('error.offline');
+    if (failure.endsSession) return call('error.sessionEnded');
+    // The server answered 404 for the path itself: the handset is talking to a server that does
+    // not have this feature (yet), not to one that could not find a table or a product.
+    if (failure.statusCode == 404 && failure.message.toLowerCase().contains('route not found')) {
+      return call('error.serviceUnavailable');
+    }
+    if (failure.code == 'RATE_LIMIT_EXCEEDED') return call('error.rateLimited');
+    if (failure.code == 'SERVER_ERROR') return call('error.server');
+    return failure.message;
   }
 
   /// Money, formatted the way the POS prints it: no decimals when the amount is whole.
@@ -161,6 +180,10 @@ class AppStrings {
     'settings.printing': 'พิมพ์ใบออเดอร์ที่ POS',
     'settings.printingOn': 'เปิดใช้งาน',
     'settings.printingOff': 'สาขานี้ยังไม่ได้ตั้งเครื่องพิมพ์',
+    'error.offline': 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่',
+    'error.serviceUnavailable': 'เซิร์ฟเวอร์ยังไม่รองรับการใช้งานนี้ กรุณาติดต่อผู้ดูแลระบบ',
+    'error.rateLimited': 'ทำรายการถี่เกินไป กรุณารอสักครู่แล้วลองใหม่',
+    'error.server': 'เซิร์ฟเวอร์ขัดข้อง กรุณาลองใหม่อีกครั้ง',
     'error.sessionEnded': 'เครื่องนี้ถูกออกจากระบบ กรุณาเข้าสู่ระบบใหม่',
     'error.pendingPayment': 'โต๊ะนี้กำลังชำระเงินที่ POS ยังเพิ่มรายการไม่ได้',
     'error.outOfStock': 'สินค้าบางรายการมีไม่พอ',
@@ -271,6 +294,10 @@ class AppStrings {
     'settings.printing': 'Order slips at the POS',
     'settings.printingOn': 'On',
     'settings.printingOff': 'No printer configured for this branch',
+    'error.offline': 'Cannot reach the server. Check the internet connection and try again.',
+    'error.serviceUnavailable': 'The server does not support this yet. Please contact your administrator.',
+    'error.rateLimited': 'Too many attempts. Please wait a moment and try again.',
+    'error.server': 'Something went wrong on the server. Please try again.',
     'error.sessionEnded': 'This handset was signed out. Please sign in again.',
     'error.pendingPayment': 'This table is being paid for at the POS — items cannot be added',
     'error.outOfStock': 'Some items do not have enough stock',

@@ -73,7 +73,7 @@ class _TakeOverSheetState extends ConsumerState<_TakeOverSheet> {
     final failure = ref.read(activeTableProvider).failure;
     setState(() {
       _busy = false;
-      _error = failure?.code == 'INVALID_MANAGER_PIN' ? t('claim.pinWrong') : failure?.message;
+      _error = failure?.code == 'INVALID_MANAGER_PIN' ? t('claim.pinWrong') : (failure == null ? null : t.failure(failure));
     });
     ref.read(activeTableProvider.notifier).acknowledgeFailure();
   }

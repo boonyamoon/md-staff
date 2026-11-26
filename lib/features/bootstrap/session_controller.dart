@@ -108,12 +108,20 @@ class AppSessionController extends Notifier<AppSession> {
   }
 }
 
-/// The handset's branch/terminal/printing configuration. Read once per sign-in.
+/// The handset's branch/terminal/printing configuration. Read once per sign-in and per launch.
 final configProvider = FutureProvider<StaffAppConfig>((ref) async {
   // Re-read whenever the phase changes, so the config never outlives the session it belongs to.
-  final session = ref.watch(sessionProvider);
-  if (session.phase != AppPhase.ready) {
+  final phase = ref.watch(sessionProvider.select((s) => s.phase));
+  if (phase != AppPhase.ready) {
     throw StateError('config is only available once signed in');
   }
-  return ref.watch(sessionRepositoryProvider).config();
+  final credentials = ref.read(credentialStoreProvider);
+  final config = await ref.watch(sessionRepositoryProvider).config();
+  if (config.branch.reportsThemeColor) {
+    await credentials.saveThemeColor(
+      branchId: config.branch.branchId,
+      color: config.branch.themeColor,
+    );
+  }
+  return config;
 });
