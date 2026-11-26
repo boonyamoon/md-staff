@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.pos.md_staff"
+    namespace = "com.meedee.staff"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,8 +20,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.pos.md_staff"
+        // The same identifier as the iOS bundle.
+        applicationId = "com.meedee.staff"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

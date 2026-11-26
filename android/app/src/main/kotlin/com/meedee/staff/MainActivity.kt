@@ -1,4 +1,4 @@
-package com.pos.md_staff
+package com.meedee.staff
 
 import io.flutter.embedding.android.FlutterActivity
 
