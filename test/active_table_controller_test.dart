@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:md_staff/core/network/api_failure.dart';
@@ -381,6 +383,26 @@ void main() {
       verify(() => floor.releaseClaim(_table, _lease)).called(1);
       expect(state().isOpen, isFalse);
       expect(state().holdsClaim, isFalse);
+    });
+
+    test('opening again waits for a release still on its way', () async {
+      when(() => floor.table(_table)).thenAnswer((_) async => detail());
+      when(() => floor.claim(_table)).thenAnswer((_) async => freshClaim());
+      final released = Completer<void>();
+      when(() => floor.releaseClaim(_table, _lease)).thenAnswer((_) => released.future);
+
+      await controller().open(_table);
+      final closing = controller().close();
+      clearInteractions(floor);
+      final reopening = controller().open(_table);
+      await pumpEventQueue();
+      // Reading the table now could hand back the lease that is about to be dropped.
+      verifyNever(() => floor.table(_table));
+
+      released.complete();
+      await Future.wait([closing, reopening]);
+      verify(() => floor.table(_table)).called(1);
+      expect(state().holdsClaim, isTrue);
     });
 
     test('a failed release is not worth bothering the waiter about', () async {

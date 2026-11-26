@@ -108,6 +108,10 @@ final activeTableProvider = NotifierProvider<ActiveTableController, ActiveTableS
 ///     instead of adding it twice.
 class ActiveTableController extends Notifier<ActiveTableState> {
   Timer? _renewTimer;
+
+  /// A release still on its way. [open] waits for it: a table taken again at once could otherwise
+  /// be handed back the very lease that is about to be dropped.
+  Future<void>? _releasing;
   String? _pendingIdempotencyKey;
   final _uuid = const Uuid();
 
@@ -134,6 +138,7 @@ class ActiveTableController extends Notifier<ActiveTableState> {
 
     final floor = ref.read(floorRepositoryProvider);
     try {
+      await _releasing;
       final detail = await floor.table(floorItemId);
       if (detail.session?.isPendingPayment ?? false) {
         state = state.copyWith(
@@ -220,22 +225,15 @@ class ActiveTableController extends Notifier<ActiveTableState> {
     final floorItemId = state.floorItemId;
     state = const ActiveTableState();
     if (claim == null || floorItemId == null) return;
+    await (_releasing = _release(floorItemId, claim.leaseToken));
+  }
+
+  Future<void> _release(String floorItemId, String leaseToken) async {
     try {
-      await ref.read(floorRepositoryProvider).releaseClaim(floorItemId, claim.leaseToken);
+      await ref.read(floorRepositoryProvider).releaseClaim(floorItemId, leaseToken);
     } on ApiFailure {
       // The lease expires on its own within minutes; a failed release is not worth telling a
       // waiter who has already walked to the next table.
-    }
-  }
-
-  Future<void> refreshDetail() async {
-    final floorItemId = state.floorItemId;
-    if (floorItemId == null) return;
-    try {
-      final detail = await ref.read(floorRepositoryProvider).table(floorItemId);
-      state = state.copyWith(detail: detail);
-    } on ApiFailure catch (failure) {
-      state = state.copyWith(failure: failure);
     }
   }
 
@@ -326,7 +324,6 @@ class ActiveTableController extends Notifier<ActiveTableState> {
         cart: const <CartLine>[],
         lastRound: round,
       );
-      await refreshDetail();
       return round;
     } on ApiFailure catch (failure) {
       // A lost claim is terminal for this screen: the cart stays, but it can no longer be sent
@@ -363,10 +360,6 @@ class ActiveTableController extends Notifier<ActiveTableState> {
 
   void acknowledgeExit() {
     if (state.exitReason != null) state = state.copyWith(clearExitReason: true);
-  }
-
-  void acknowledgeRound() {
-    if (state.lastRound != null) state = state.copyWith(clearLastRound: true);
   }
 
   // ── Lease renewal ──

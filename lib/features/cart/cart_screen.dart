@@ -9,6 +9,7 @@ import '../../core/widgets/product_thumb.dart';
 import '../../core/widgets/quantity_stepper.dart';
 import '../../core/widgets/states.dart';
 import '../../data/dto/cart_line.dart';
+import '../../router/app_router.dart';
 import '../bootstrap/session_controller.dart';
 import '../menu/menu_catalog_controller.dart';
 import '../tables/active_table_controller.dart';
@@ -53,9 +54,8 @@ class CartScreen extends ConsumerWidget {
       return;
     }
 
-    // The floor's totals changed, so refresh it for whoever looks next. Not awaited: the
-    // waiter is already walking away from this screen.
-    unawaited(ref.read(zonesProvider.notifier).refreshAfterChange());
+    final controller = ref.read(activeTableProvider.notifier);
+    final floor = ref.read(zonesProvider.notifier);
     final printing = ref.read(configProvider).value?.ordering.kitchenPrintingEnabled ?? true;
     final message = round.idempotentReplay
         ? t('cart.alreadySent')
@@ -63,8 +63,11 @@ class CartScreen extends ConsumerWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), duration: const Duration(seconds: 4)),
     );
-    ref.read(activeTableProvider.notifier).acknowledgeRound();
-    Navigator.of(context).pop();
+    // The round is in, so this table is done with: give it back and go to the floor, waiting for
+    // neither. The floor is fetched once the claim is gone, so it shows neither it nor old totals.
+    final released = controller.close();
+    AppRoutes.goZones(context);
+    unawaited(released.then((_) => floor.refreshAfterChange()));
   }
 
   Future<void> _confirmClear(BuildContext context, WidgetRef ref) async {
