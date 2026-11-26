@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import '../config/app_config.dart';
 import '../storage/credential_store.dart';
 import 'api_failure.dart';
+import 'api_logger.dart';
 
 /// Why the handset had to go back to the sign-in screen.
 enum SessionEvent {
@@ -42,6 +43,9 @@ class ApiClient {
     _dio.interceptors.add(
       InterceptorsWrapper(onRequest: _onRequest, onError: _onError),
     );
+    // After the token interceptor on the way out (so the log shows the real call, with its masked
+    // Authorization) and after its error handling on the way back. Silent outside debug builds.
+    _dio.interceptors.add(ApiLogger());
   }
 
   final Dio _dio;
