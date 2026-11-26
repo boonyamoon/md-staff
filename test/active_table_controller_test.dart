@@ -277,6 +277,7 @@ void main() {
             idempotencyKey: any(named: 'idempotencyKey'),
             items: any(named: 'items'),
             guestCount: any(named: 'guestCount'),
+            sessionId: any(named: 'sessionId'),
           )).thenAnswer((_) async => round());
 
       await openWithOneLine();
@@ -290,6 +291,7 @@ void main() {
             idempotencyKey: captureAny(named: 'idempotencyKey'),
             items: captureAny(named: 'items'),
             guestCount: captureAny(named: 'guestCount'),
+            sessionId: any(named: 'sessionId'),
           ))
         ..called(1);
       expect(call.captured[0], _table);
@@ -304,6 +306,7 @@ void main() {
             idempotencyKey: any(named: 'idempotencyKey'),
             items: any(named: 'items'),
             guestCount: any(named: 'guestCount'),
+            sessionId: any(named: 'sessionId'),
           )).thenAnswer((_) async {
         attempt += 1;
         if (attempt == 1) {
@@ -324,6 +327,7 @@ void main() {
             idempotencyKey: captureAny(named: 'idempotencyKey'),
             items: any(named: 'items'),
             guestCount: any(named: 'guestCount'),
+            sessionId: any(named: 'sessionId'),
           ))
         ..called(2);
       expect(call.captured[0], call.captured[1]);
@@ -336,6 +340,7 @@ void main() {
             idempotencyKey: any(named: 'idempotencyKey'),
             items: any(named: 'items'),
             guestCount: any(named: 'guestCount'),
+            sessionId: any(named: 'sessionId'),
           )).thenThrow(
         const ApiFailure(code: 'TABLE_CLAIM_LOST', message: 'Dao has this table now', statusCode: 409),
       );
@@ -347,6 +352,63 @@ void main() {
       expect(state().cart, hasLength(1));
     });
 
+    test('names the party the round is for, so it cannot land on a new bill', () async {
+      when(() => floor.table(_table)).thenAnswer(
+        (_) async => detail(
+          claim: mineClaim(),
+          session: const TableSessionDetail(
+            sessionId: 'sess-1',
+            status: 'OPEN',
+            openedAt: '2026-01-01T00:00:00Z',
+          ),
+        ),
+      );
+      when(() => floor.placeOrder(
+            floorItemId: any(named: 'floorItemId'),
+            leaseToken: any(named: 'leaseToken'),
+            idempotencyKey: any(named: 'idempotencyKey'),
+            items: any(named: 'items'),
+            guestCount: any(named: 'guestCount'),
+            sessionId: any(named: 'sessionId'),
+          )).thenAnswer((_) async => round());
+
+      await openWithOneLine();
+      await controller().sendToKitchen();
+
+      final named = verify(() => floor.placeOrder(
+            floorItemId: any(named: 'floorItemId'),
+            leaseToken: any(named: 'leaseToken'),
+            idempotencyKey: any(named: 'idempotencyKey'),
+            items: any(named: 'items'),
+            guestCount: any(named: 'guestCount'),
+            sessionId: captureAny(named: 'sessionId'),
+          )).captured.single;
+      expect(named, 'sess-1');
+    });
+
+    for (final code in [
+      'TABLE_SESSION_CHANGED',
+      'SESSION_CLOSED',
+      'ORDER_NOT_EDITABLE',
+      'ORDER_NOT_FOUND',
+    ]) {
+      test('$code ends the screen: there is nobody to send to', () async {
+        when(() => floor.placeOrder(
+              floorItemId: any(named: 'floorItemId'),
+              leaseToken: any(named: 'leaseToken'),
+              idempotencyKey: any(named: 'idempotencyKey'),
+              items: any(named: 'items'),
+              guestCount: any(named: 'guestCount'),
+              sessionId: any(named: 'sessionId'),
+            )).thenThrow(ApiFailure(code: code, message: 'gone', statusCode: 409));
+
+        await openWithOneLine();
+
+        expect(await controller().sendToKitchen(), isNull);
+        expect(state().exitReason, TableExitReason.tableChanged);
+      });
+    }
+
     test('sends nothing without a claim', () async {
       expect(await controller().sendToKitchen(), isNull);
       verifyNever(() => floor.placeOrder(
@@ -355,6 +417,7 @@ void main() {
             idempotencyKey: any(named: 'idempotencyKey'),
             items: any(named: 'items'),
             guestCount: any(named: 'guestCount'),
+            sessionId: any(named: 'sessionId'),
           ));
     });
 
@@ -367,7 +430,111 @@ void main() {
             idempotencyKey: any(named: 'idempotencyKey'),
             items: any(named: 'items'),
             guestCount: any(named: 'guestCount'),
+            sessionId: any(named: 'sessionId'),
           ));
+    });
+  });
+
+  group('the key a round is sent under', () {
+    const other = 'f2';
+    late List<String> keys;
+    late List<Object> answers;
+    String? seated;
+
+    setUp(() {
+      keys = [];
+      answers = [];
+      seated = null;
+      for (final table in [_table, other]) {
+        when(() => floor.table(table)).thenAnswer(
+          (_) async => detail(
+            session: seated == null
+                ? null
+                : TableSessionDetail(
+                    sessionId: seated!,
+                    status: 'OPEN',
+                    openedAt: '2026-01-01T00:00:00Z',
+                  ),
+          ),
+        );
+        when(() => floor.claim(table)).thenAnswer((_) async => freshClaim());
+        when(() => floor.releaseClaim(table, _lease)).thenAnswer((_) async {});
+      }
+      when(() => floor.placeOrder(
+            floorItemId: any(named: 'floorItemId'),
+            leaseToken: any(named: 'leaseToken'),
+            idempotencyKey: any(named: 'idempotencyKey'),
+            items: any(named: 'items'),
+            guestCount: any(named: 'guestCount'),
+            sessionId: any(named: 'sessionId'),
+          )).thenAnswer((call) async {
+        keys.add(call.namedArguments[#idempotencyKey] as String);
+        // Whatever the test queued; otherwise the answer is lost on the way back.
+        final answer = answers.isEmpty
+            ? const ApiFailure(code: 'NETWORK_UNREACHABLE', message: 'no connection')
+            : answers.removeAt(0);
+        if (answer is ApiFailure) throw answer;
+        return answer as PlacedRound;
+      });
+    });
+
+    /// Takes [table], sends one dish there and leaves again.
+    Future<void> sendAt(String table) async {
+      await controller().open(table);
+      controller().addLine(cartLine());
+      await controller().sendToKitchen();
+      await controller().close();
+    }
+
+    test('is not carried to another table', () async {
+      await sendAt(_table);
+      await sendAt(other);
+
+      expect(keys[1], isNot(keys[0]));
+    });
+
+    test('is used again on the same table, so the dishes cannot be cooked twice', () async {
+      await sendAt(_table);
+      await sendAt(other);
+      await sendAt(_table);
+
+      expect(keys[2], keys[0]);
+    });
+
+    test('made at a free table, still stands once that attempt has opened it', () async {
+      await sendAt(_table);
+      seated = 'sess-1';
+      await sendAt(_table);
+
+      expect(keys[1], keys[0]);
+    });
+
+    test('is not spent on the next party to sit at the table', () async {
+      seated = 'sess-1';
+      await sendAt(_table);
+      seated = 'sess-2';
+      await sendAt(_table);
+
+      expect(keys[1], isNot(keys[0]));
+    });
+
+    test('is replaced once the server says an earlier round already arrived under it', () async {
+      answers = [
+        const ApiFailure(code: 'NETWORK_UNREACHABLE', message: 'no connection'),
+        const ApiFailure(code: 'IDEMPOTENCY_KEY_REUSED', message: 'used', statusCode: 409),
+        round(),
+      ];
+      await controller().open(_table);
+      controller().addLine(cartLine());
+      await controller().sendToKitchen();
+      // A dish added before trying again: no longer the round the server may hold.
+      controller().addLine(cartLine(lineId: 'l2'));
+      await controller().sendToKitchen();
+      expect(state().cart, isNotEmpty);
+      expect(await controller().sendToKitchen(), isNotNull);
+
+      expect(keys[1], keys[0]);
+      expect(keys[2], isNot(keys[1]));
     });
   });
 

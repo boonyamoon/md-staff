@@ -30,9 +30,10 @@ class CartScreen extends ConsumerWidget {
 
     if (round == null) {
       final failure = ref.read(activeTableProvider).failure;
-      // A lost claim or a bill opened at the POS is handled by TableExitListener, which shows a
-      // dialog and leaves the table; anything else is retryable right here.
-      if (failure != null && !failure.isClaimConflict) {
+      // A lost claim, a bill opened at the POS or a party that has gone is handled by
+      // TableExitListener, which shows a dialog and leaves the table; anything else is retryable
+      // right here.
+      if (failure != null && !failure.isClaimConflict && !failure.isTableGone) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -40,9 +41,12 @@ class CartScreen extends ConsumerWidget {
                   ? '${t('error.outOfStock')}\n${failure.message}'
                   : failure.code == 'CONCURRENT_MODIFICATION'
                       ? t('error.concurrent')
-                      : t.failure(failure),
+                      : failure.code == 'IDEMPOTENCY_KEY_REUSED'
+                          ? t('cart.earlierSent')
+                          : t.failure(failure),
             ),
-            duration: const Duration(seconds: 5),
+            // The one about an earlier send asks for something to be done, so it stays longer.
+            duration: Duration(seconds: failure.code == 'IDEMPOTENCY_KEY_REUSED' ? 10 : 5),
           ),
         );
         // Refused because the menu moved on: fetch it, so what is picked next is current.

@@ -11,9 +11,9 @@ import 'active_table_controller.dart';
 
 /// Wraps the table's screens and gets the waiter off them the moment the table stops being theirs.
 ///
-/// Two ways that happens, both of which must be explained rather than silently failing on the next
-/// tap: a manager took the table over (the lease renew or the send comes back TABLE_CLAIM_LOST),
-/// or the cashier opened its bill at the POS.
+/// Three ways that happens, each of which must be explained rather than silently failing on the
+/// next tap: a manager took the table over (the lease renew or the send comes back
+/// TABLE_CLAIM_LOST), the cashier opened its bill at the POS, or a send found the party gone.
 class TableExitListener extends ConsumerStatefulWidget {
   const TableExitListener({super.key, required this.floorItemId, required this.child});
 
@@ -28,14 +28,18 @@ class _TableExitListenerState extends ConsumerState<TableExitListener> {
   bool _handling = false;
 
   Future<void> _handle(TableExitReason reason) async {
-    if (_handling) return;
+    // The menu and the cart over it both listen. The first to get here takes the exit by
+    // acknowledging it; the other then finds nothing left to explain.
+    if (_handling || ref.read(activeTableProvider).exitReason != reason) return;
     _handling = true;
     final t = ref.read(stringsProvider);
-    ref.read(activeTableProvider.notifier).acknowledgeExit();
+    final controller = ref.read(activeTableProvider.notifier);
+    controller.acknowledgeExit();
 
     final (title, body) = switch (reason) {
       TableExitReason.claimLost => (t('claim.lost.title'), t('claim.lost.body')),
       TableExitReason.pendingPayment => (t('tables.pendingPayment'), t('error.pendingPayment')),
+      TableExitReason.tableChanged => (t('table.gone.title'), t('table.gone.body')),
     };
 
     await showDialog<void>(
@@ -55,7 +59,15 @@ class _TableExitListenerState extends ConsumerState<TableExitListener> {
     );
     if (!mounted) return;
     // Someone else changed this table, so the floor on the way back is fetched again.
-    unawaited(ref.read(zonesProvider.notifier).refresh());
+    final floor = ref.read(zonesProvider.notifier);
+    if (reason == TableExitReason.tableChanged) {
+      // The claim is still this handset's: given back, with the cart, before the floor is read.
+      final released = controller.close();
+      AppRoutes.goZones(context);
+      unawaited(released.then((_) => floor.refreshAfterChange()));
+      return;
+    }
+    unawaited(floor.refresh());
     AppRoutes.goZones(context);
   }
 

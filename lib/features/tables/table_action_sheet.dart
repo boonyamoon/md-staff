@@ -10,6 +10,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/stale_banner.dart';
 import '../../core/widgets/states.dart';
 import '../../data/dto/floor_dto.dart';
+import '../../data/dto/order_dto.dart';
 import '../../data/repositories/floor_repository.dart';
 import '../bootstrap/session_controller.dart';
 import '../zones/zones_controller.dart';
@@ -196,12 +197,32 @@ class _TableActionSheetState extends ConsumerState<TableActionSheet> {
       );
       if (guests == null || !mounted) return null;
     }
+    final floor = _providers.read(zonesProvider.notifier);
     if (await _claim() == null) return null;
+    final now = _providers.read(activeTableProvider).detail;
+    if (!_stillAsSeen(view, now)) {
+      // Cancelled, paid for or moved since the waiter looked: not the party they meant to add to.
+      await _providers.read(activeTableProvider.notifier).close();
+      _say(_t('error.tableChanged'));
+      unawaited(floor.refreshAfterChange());
+      if (mounted) ref.invalidate(tableSheetProvider(_id));
+      return null;
+    }
     // Unless the table was seated meanwhile: that party's own count stands.
-    if (guests != null && _providers.read(activeTableProvider).detail?.session == null) {
+    if (guests != null && now?.session == null) {
       _providers.read(activeTableProvider.notifier).setGuestCount(guests);
     }
     return const TableSheetResult(next: TableSheetNext.order);
+  }
+
+  /// Whether the table still seats the party the waiter was looking at, bill and all. A table seen
+  /// free may have been seated since: ordering then joins that party.
+  static bool _stillAsSeen(TableSheetView seen, TableDetail? now) {
+    if (!seen.isOpen) return true;
+    if (now?.session?.sessionId != seen.sessionId) return false;
+    final order = now?.order;
+    return !seen.hasOrder ||
+        (order != null && order.status != 'CANCELLED' && order.status != 'VOIDED');
   }
 
   Future<void> _open(FloorRepository tables, String lease, int guests) => _once(

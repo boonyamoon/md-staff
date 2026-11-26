@@ -18,6 +18,10 @@ enum TableExitReason {
 
   /// The cashier opened this table's bill at the POS.
   pendingPayment,
+
+  /// The party was cancelled, paid for or moved while this handset was ordering for it. The cart
+  /// was never sent, and goes with the table.
+  tableChanged,
 }
 
 class ActiveTableState {
@@ -105,14 +109,18 @@ final activeTableProvider = NotifierProvider<ActiveTableController, ActiveTableS
 ///     waiter keep building a cart they can no longer send.
 ///  2. **One round, one idempotency key.** The key is minted when the waiter presses send and
 ///     kept until that round is accepted, so a retry after a lost response replays the same round
-///     instead of adding it twice.
+///     instead of adding it twice. It belongs to that table and party: no other round may use it.
 class ActiveTableController extends Notifier<ActiveTableState> {
   Timer? _renewTimer;
 
   /// A release still on its way. [open] waits for it: a table taken again at once could otherwise
   /// be handed back the very lease that is about to be dropped.
   Future<void>? _releasing;
-  String? _pendingIdempotencyKey;
+
+  /// Rounds sent but never confirmed, by table: the key each went out under, and the party it was
+  /// for. Kept after leaving the table, so that sending the same dishes there again replays the
+  /// first attempt rather than cooking them twice.
+  final _unconfirmed = <String, ({String key, String? sessionId})>{};
   final _uuid = const Uuid();
 
   @override
@@ -122,6 +130,7 @@ class ActiveTableController extends Notifier<ActiveTableState> {
     ref.listen(sessionProvider, (previous, next) {
       if (next.phase != AppPhase.ready) {
         _stopRenewTimer();
+        _unconfirmed.clear();
         state = const ActiveTableState();
       }
     });
@@ -306,8 +315,8 @@ class ActiveTableController extends Notifier<ActiveTableState> {
     final claim = state.claim;
     if (floorItemId == null || claim == null || state.cart.isEmpty || state.sending) return null;
 
-    // Minted once per round and kept across retries: this is what makes a lost response safe.
-    final idempotencyKey = _pendingIdempotencyKey ??= _uuid.v4();
+    final sessionId = state.detail?.session?.sessionId;
+    final idempotencyKey = _roundKey(floorItemId, sessionId);
     state = state.copyWith(sending: true, clearFailure: true, clearLastRound: true);
 
     try {
@@ -317,8 +326,9 @@ class ActiveTableController extends Notifier<ActiveTableState> {
             idempotencyKey: idempotencyKey,
             items: state.cart.map((l) => l.toRequestJson()).toList(),
             guestCount: state.guestCount,
+            sessionId: sessionId,
           );
-      _pendingIdempotencyKey = null;
+      _unconfirmed.remove(floorItemId);
       state = state.copyWith(
         sending: false,
         cart: const <CartLine>[],
@@ -347,11 +357,39 @@ class ActiveTableController extends Notifier<ActiveTableState> {
         );
         return null;
       }
+      // Nobody left to cook these for: the screen closes the table, cart and all.
+      if (failure.isTableGone) {
+        _stopRenewTimer();
+        _unconfirmed.remove(floorItemId);
+        state = state.copyWith(
+          sending: false,
+          failure: failure,
+          exitReason: TableExitReason.tableChanged,
+        );
+        return null;
+      }
+      // The server holds a different round under this key: an earlier attempt did arrive. It is
+      // settled now, so the next press — once the waiter has checked the bill — is a new round.
+      if (failure.code == 'IDEMPOTENCY_KEY_REUSED') _unconfirmed.remove(floorItemId);
       // Everything else — no stock, no connection, a rate limit — keeps the cart and the claim so
       // the waiter can simply press send again. The idempotency key is deliberately kept too.
       state = state.copyWith(sending: false, failure: failure);
       return null;
     }
+  }
+
+  /// The key to send this round under: the one an unconfirmed attempt on this table used, or a new
+  /// one. Reusing it is what makes a lost response safe.
+  String _roundKey(String floorItemId, String? sessionId) {
+    final earlier = _unconfirmed[floorItemId];
+    // An attempt made at a free table may be what opened the party now seated, so its key stands.
+    // One made for another party is not spent on this one.
+    if (earlier != null && (earlier.sessionId == null || earlier.sessionId == sessionId)) {
+      return earlier.key;
+    }
+    final key = _uuid.v4();
+    _unconfirmed[floorItemId] = (key: key, sessionId: sessionId);
+    return key;
   }
 
   void acknowledgeFailure() {

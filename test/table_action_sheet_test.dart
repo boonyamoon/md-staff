@@ -208,6 +208,49 @@ void main() {
         guestCount: any(named: 'guestCount')));
   });
 
+  /// The server's table as the menu opened, then as it is when the waiter presses.
+  void changesAfterOpening(TableDetail then) {
+    var reads = 0;
+    when(() => floor.table('A1')).thenAnswer(
+      (_) async => ++reads == 1 ? _detail(kitchen: ['SENT'], total: 500, guests: 4) : then,
+    );
+  }
+
+  for (final (what, now) in [
+    ('was cancelled at the POS', _detail(kitchen: null)),
+    ('was given to another party', TableDetail.fromJson({
+      'floor_item_id': 'A1',
+      'label': 'A1',
+      'session': {'session_id': 's2', 'status': 'OPEN'},
+    })),
+    ('lost its bill while still open', _detail(kitchen: [])),
+  ]) {
+    testWidgets('ordering more at a table that $what does not reach the menu', (tester) async {
+      changesAfterOpening(now);
+      await open(tester);
+
+      await press(tester, 'สั่งเพิ่ม');
+
+      expect(closed, isFalse);
+      expect(find.text('โต๊ะนี้เปลี่ยนไปแล้ว กรุณาตรวจสอบอีกครั้ง'), findsOneWidget);
+      // Given back, and both this menu and the floor read again.
+      verify(() => floor.releaseClaim('A1', _lease)).called(1);
+      verify(floor.zones).called(2);
+      verify(() => floor.table('A1')).called(greaterThanOrEqualTo(3));
+    });
+  }
+
+  testWidgets('after a cancellation, the next press seats a new party properly', (tester) async {
+    changesAfterOpening(_detail(kitchen: null));
+    await open(tester);
+
+    await press(tester, 'สั่งเพิ่ม');
+    // The menu now shows the free table, so ordering asks who is sitting down.
+    await press(tester, 'สั่งอาหาร');
+
+    expect(find.text('จำนวนลูกค้าโต๊ะ A1'), findsOneWidget);
+  });
+
   testWidgets('a table seated meanwhile keeps its own guest count', (tester) async {
     var reads = 0;
     // Free when the menu opened; seated by the time it is claimed.

@@ -25,6 +25,14 @@ class ApiFailure implements Exception {
   bool get isMissingRoute =>
       statusCode == 404 && message.toLowerCase().contains('route not found');
 
+  /// The party an order was being built for is no longer there to receive it: the bill was
+  /// cancelled or paid at the POS, or the party moved. Sending again cannot help.
+  bool get isTableGone =>
+      code == 'TABLE_SESSION_CHANGED' ||
+      code == 'SESSION_CLOSED' ||
+      code == 'ORDER_NOT_EDITABLE' ||
+      code == 'ORDER_NOT_FOUND';
+
   /// The order was refused because the menu on this handset is out of date.
   bool get isMenuOutdated =>
       code == 'INSUFFICIENT_STOCK' ||

@@ -60,12 +60,16 @@ class FloorRepository {
   /// [idempotencyKey] must stay the same across retries of the same round — pass the key the cart
   /// generated when the waiter pressed send, not a fresh one per attempt, or a retry after a lost
   /// response adds the round twice. Generate one with [newIdempotencyKey].
+  ///
+  /// [sessionId] names the party the round is for, when the table had one: the server then refuses
+  /// it if that party is gone, rather than opening the table afresh.
   Future<PlacedRound> placeOrder({
     required String floorItemId,
     required String leaseToken,
     required String idempotencyKey,
     required List<Map<String, dynamic>> items,
     int? guestCount,
+    String? sessionId,
     String orderType = 'DINE_IN',
   }) async {
     final body = await _api.post(
@@ -75,6 +79,7 @@ class FloorRepository {
         'items': items,
         'order_type': orderType,
         'guest_count': ?guestCount,
+        'session_id': ?sessionId,
       },
     );
     return PlacedRound.fromJson(envelopeData(body));
