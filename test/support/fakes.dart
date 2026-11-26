@@ -65,6 +65,7 @@ Map<String, dynamic> tableJson(
   String sessionStatus = 'OPEN',
   String status = 'AVAILABLE',
   bool? heldByMe,
+  int guests = 2,
 }) =>
     {
       'floor_item_id': id,
@@ -77,6 +78,7 @@ Map<String, dynamic> tableJson(
           'status': sessionStatus,
           'opened_at': '2026-01-01T00:00:00Z',
           'item_count': foodStatus == 'NOT_ORDERED' ? 0 : 2,
+          'guest_count': guests,
           'food_status': foodStatus,
         },
       if (heldByMe != null)

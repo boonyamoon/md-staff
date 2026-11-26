@@ -25,8 +25,8 @@ String tableStatusKey(TableFoodStatus status) => switch (status) {
 /// How thick a table's ring is, in every state.
 const double tableRingWidth = 4;
 
-/// One table: its name, how many it seats, and a ring saying how far along its food is. A corner
-/// icon covers what the ring cannot — who holds the table, and a bill open at the POS.
+/// One table: its name, how many guests are at it, and a ring saying how far along its food is. A
+/// corner icon covers what the ring cannot — who holds the table, and a bill open at the POS.
 ///
 /// Watches only its own table, so a refresh repaints just the tables that changed.
 class TableTile extends ConsumerWidget {
@@ -49,6 +49,7 @@ class TableTile extends ConsumerWidget {
     final description = [
       table.label,
       if (disabled) t('tables.outOfService') else t(tableStatusKey(table.foodStatus)),
+      if (table.session != null) '${table.session!.guestCount} ${t('sheet.people')}',
       if (table.isHeldByMe) t('tables.heldByMe'),
       if (table.isHeldByOther) '${t('tables.heldBy')} ${table.claim!.holder.staffName}',
       if (pendingPayment) t('tables.pendingPayment'),
@@ -93,7 +94,18 @@ class TableTile extends ConsumerWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: ink),
                       ),
-                      if (table.capacity != null) ...[
+                      // Nobody at the table, so no head count: it says so instead.
+                      if (table.session == null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          '(${t(disabled ? 'tables.outOfService' : 'tables.free')})',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ink),
+                        ),
+                      ] else ...[
+                        // The guests seated — on every table of a merged party, the party's own
+                        // count. Not how many the table can seat.
                         const SizedBox(height: 6),
                         Row(
                           mainAxisSize: MainAxisSize.min,
@@ -101,7 +113,7 @@ class TableTile extends ConsumerWidget {
                             Icon(Icons.person_rounded, size: 19, color: ink),
                             const SizedBox(width: 4),
                             Text(
-                              '${table.capacity}',
+                              '${table.session!.guestCount}',
                               style:
                                   TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ink),
                             ),

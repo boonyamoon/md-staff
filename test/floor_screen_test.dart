@@ -114,6 +114,55 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('counts the guests at a table, not its seats', (tester) async {
+    const group = [
+      {'floor_item_id': 'M1', 'label': 'M1'},
+      {'floor_item_id': 'M2', 'label': 'M2'},
+    ];
+    Map<String, dynamic> member(String id) {
+      final table = tableJson(id, foodStatus: 'WAITING', guests: 7);
+      (table['session'] as Map<String, dynamic>)
+        ..['tables'] = group
+        ..['primary_floor_item_id'] = 'M1';
+      return table;
+    }
+
+    when(floor.zones).thenAnswer(
+      (_) async => [
+        _zone('z1', 'Zone', [
+          // Four seats each; three guests at S1, and a party of seven across M1 and M2.
+          tableJson('S1', foodStatus: 'NOT_ORDERED', guests: 3),
+          member('M1'),
+          member('M2'),
+        ]),
+      ],
+    );
+    await pumpFloor(tester);
+
+    expect(find.text('3'), findsOneWidget);
+    expect(find.text('7'), findsNWidgets(2));
+    expect(find.text('4'), findsNothing);
+  });
+
+  testWidgets('says a table nobody sits at is free, with no head count', (tester) async {
+    when(floor.zones).thenAnswer(
+      (_) async => [
+        _zone('z1', 'Zone', [
+          tableJson('F1'),
+          tableJson('F2', heldByMe: false),
+          tableJson('F3', status: 'DISABLED'),
+        ]),
+      ],
+    );
+    await pumpFloor(tester);
+
+    // F2 is held by another handset but nobody is seated yet.
+    expect(find.text('(ว่าง)'), findsNWidgets(2));
+    expect(find.text('(งดใช้)'), findsOneWidget);
+    expect(find.byIcon(Icons.person_rounded), findsNothing);
+    expect(find.text('4'), findsNothing);
+  });
+
   testWidgets('fits a small phone at the largest text size', (tester) async {
     when(floor.zones).thenAnswer((_) async => _floor);
     tester.platformDispatcher.textScaleFactorTestValue = 1.3;
