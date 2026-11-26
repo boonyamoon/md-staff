@@ -120,6 +120,17 @@ ThemeData buildAppTheme([Color primary = MeedColors.defaultPrimary]) {
         borderSide: BorderSide(color: primary, width: 2),
       ),
     ),
+    // Every popup and bottom sheet is plain white. Left to Material they take a tint derived from
+    // the branch's theme colour.
+    dialogTheme: const DialogThemeData(
+      backgroundColor: MeedColors.card,
+      surfaceTintColor: Colors.transparent,
+    ),
+    bottomSheetTheme: const BottomSheetThemeData(
+      backgroundColor: MeedColors.card,
+      modalBackgroundColor: MeedColors.card,
+      surfaceTintColor: Colors.transparent,
+    ),
     snackBarTheme: const SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: MeedColors.ink,

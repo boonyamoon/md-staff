@@ -20,6 +20,15 @@ void main() {
     expect(buildAppTheme(const Color(0xFFD81B60)).colorScheme.onPrimary, Colors.white);
   });
 
+  test('popups and bottom sheets are white whatever the branch colour', () {
+    for (final color in [MeedColors.defaultPrimary, const Color(0xFF38BDF8)]) {
+      final theme = buildAppTheme(color);
+      expect(theme.dialogTheme.backgroundColor, Colors.white);
+      expect(theme.bottomSheetTheme.backgroundColor, Colors.white);
+      expect(theme.bottomSheetTheme.modalBackgroundColor, Colors.white);
+    }
+  });
+
   test('reads theme_color from the access snapshot', () {
     final access = StaffAppAccess.fromSnapshot({
       'user_branch_assignments': [

@@ -179,6 +179,14 @@ void main() {
 
     await press(tester, 'สั่งอาหาร');
     expect(find.text('จำนวนลูกค้าโต๊ะ FREE'), findsOneWidget);
+    // The surface as painted, whatever the dialog or the theme set it from.
+    Color? surfaceOf(Type type) => tester
+        .widget<Material>(
+          find.descendant(of: find.byType(type), matching: find.byType(Material)).first,
+        )
+        .color;
+    expect(surfaceOf(Dialog), Colors.white);
+    expect(surfaceOf(BottomSheet), Colors.white);
     // Backing out takes nothing.
     await press(tester, 'ยกเลิก');
     verifyNever(() => floor.claim(any()));

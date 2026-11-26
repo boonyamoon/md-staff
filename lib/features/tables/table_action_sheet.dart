@@ -45,7 +45,6 @@ Future<TableSheetResult?> showTableSheet(BuildContext context, {required String 
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      backgroundColor: MeedColors.card,
       builder: (context) => TableActionSheet(floorItemId: floorItemId),
     );
 
