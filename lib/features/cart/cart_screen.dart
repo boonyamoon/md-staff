@@ -292,6 +292,7 @@ class _SendBar extends StatelessWidget {
             border: Border(top: BorderSide(color: MeedColors.line)),
           ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Row(
                 children: [
