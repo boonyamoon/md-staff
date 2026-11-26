@@ -54,14 +54,18 @@ class AppStrings {
   String failure(ApiFailure failure) {
     if (failure.isOffline) return call('error.offline');
     if (failure.endsSession) return call('error.sessionEnded');
-    // The server answered 404 for the path itself: the handset is talking to a server that does
-    // not have this feature (yet), not to one that could not find a table or a product.
-    if (failure.statusCode == 404 && failure.message.toLowerCase().contains('route not found')) {
-      return call('error.serviceUnavailable');
-    }
+    if (failure.isMissingRoute) return call('error.serviceUnavailable');
     if (failure.code == 'RATE_LIMIT_EXCEEDED') return call('error.rateLimited');
     if (failure.code == 'SERVER_ERROR') return call('error.server');
     return failure.message;
+  }
+
+  /// A time of day as `14:32`, with the date in front when it was not today.
+  String time(DateTime at, {DateTime? now}) {
+    final today = now ?? DateTime.now();
+    final clock = '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+    final sameDay = at.year == today.year && at.month == today.month && at.day == today.day;
+    return sameDay ? clock : '${at.day}/${at.month} $clock';
   }
 
   /// Money, formatted the way the POS prints it: no decimals when the amount is whole.
@@ -92,6 +96,10 @@ class AppStrings {
     'common.baht': 'บาท',
     'common.items': 'รายการ',
     'common.offline': 'ไม่ได้เชื่อมต่อเซิร์ฟเวอร์',
+    'common.offlineShort': 'ออฟไลน์',
+    'common.dataAsOf': 'ข้อมูลเมื่อ',
+    'common.refresh': 'รีเฟรช',
+    'floor.title': 'ผังโต๊ะ',
     'common.tryAgain': 'กรุณาลองใหม่',
     'common.required': 'จำเป็น',
     'common.optional': 'ไม่บังคับ',
@@ -113,15 +121,12 @@ class AppStrings {
     'setup.intro': 'เข้าสู่ระบบด้วยอีเมลของคุณ ทำครั้งเดียวต่อเครื่อง หลังจากนี้ไม่ต้องเข้าสู่ระบบอีก',
     'login.wrongCredentials': 'อีเมลหรือรหัสผ่านไม่ถูกต้อง',
     'login.signedOut': 'เครื่องนี้ถูกออกจากระบบแล้ว กรุณาเข้าสู่ระบบใหม่',
-    'zones.title': 'เลือกโซน',
     'zones.empty': 'สาขานี้ยังไม่มีโซนหรือโต๊ะ',
-    'zones.tables': 'โต๊ะ',
-    'zones.free': 'ว่าง',
-    'zones.busy': 'มีลูกค้า',
-    'tables.title': 'เลือกโต๊ะ',
     'tables.empty': 'โซนนี้ยังไม่มีโต๊ะ',
     'tables.free': 'ว่าง',
-    'tables.busy': 'มีลูกค้า',
+    'tables.notOrdered': 'ยังไม่ได้สั่ง',
+    'tables.waiting': 'รออาหาร',
+    'tables.served': 'เสิร์ฟครบแล้ว',
     'tables.outOfService': 'งดใช้',
     'tables.heldByMe': 'คุณกำลังสั่ง',
     'tables.heldBy': 'กำลังสั่งโดย',
@@ -184,6 +189,10 @@ class AppStrings {
     'error.serviceUnavailable': 'เซิร์ฟเวอร์ยังไม่รองรับการใช้งานนี้ กรุณาติดต่อผู้ดูแลระบบ',
     'error.rateLimited': 'ทำรายการถี่เกินไป กรุณารอสักครู่แล้วลองใหม่',
     'error.server': 'เซิร์ฟเวอร์ขัดข้อง กรุณาลองใหม่อีกครั้ง',
+    'error.needOnline': 'ต้องออนไลน์จึงจะเปิดโต๊ะได้',
+    'settings.menuData': 'ข้อมูลเมนู',
+    'settings.updatedAt': 'อัปเดตล่าสุด',
+    'settings.neverUpdated': 'ยังไม่เคยอัปเดต',
     'error.sessionEnded': 'เครื่องนี้ถูกออกจากระบบ กรุณาเข้าสู่ระบบใหม่',
     'error.pendingPayment': 'โต๊ะนี้กำลังชำระเงินที่ POS ยังเพิ่มรายการไม่ได้',
     'error.outOfStock': 'สินค้าบางรายการมีไม่พอ',
@@ -204,6 +213,10 @@ class AppStrings {
     'common.baht': 'THB',
     'common.items': 'items',
     'common.offline': 'No connection to the server',
+    'common.offlineShort': 'Offline',
+    'common.dataAsOf': 'as of',
+    'common.refresh': 'Refresh',
+    'floor.title': 'Floor',
     'common.tryAgain': 'Please try again',
     'common.required': 'Required',
     'common.optional': 'Optional',
@@ -225,15 +238,12 @@ class AppStrings {
     'setup.intro': 'Sign in with your own email. Once per phone — you will not be asked again.',
     'login.wrongCredentials': 'Wrong email or password',
     'login.signedOut': 'This handset was signed out. Please sign in again.',
-    'zones.title': 'Choose a zone',
     'zones.empty': 'This branch has no zones or tables yet',
-    'zones.tables': 'tables',
-    'zones.free': 'free',
-    'zones.busy': 'busy',
-    'tables.title': 'Choose a table',
     'tables.empty': 'This zone has no tables yet',
     'tables.free': 'Free',
-    'tables.busy': 'Busy',
+    'tables.notOrdered': 'Not ordered',
+    'tables.waiting': 'Waiting for food',
+    'tables.served': 'All served',
     'tables.outOfService': 'Out of service',
     'tables.heldByMe': 'You are ordering',
     'tables.heldBy': 'Ordering:',
@@ -298,6 +308,10 @@ class AppStrings {
     'error.serviceUnavailable': 'The server does not support this yet. Please contact your administrator.',
     'error.rateLimited': 'Too many attempts. Please wait a moment and try again.',
     'error.server': 'Something went wrong on the server. Please try again.',
+    'error.needOnline': 'You need to be online to open a table',
+    'settings.menuData': 'Menu data',
+    'settings.updatedAt': 'Last updated',
+    'settings.neverUpdated': 'Not updated yet',
     'error.sessionEnded': 'This handset was signed out. Please sign in again.',
     'error.pendingPayment': 'This table is being paid for at the POS — items cannot be added',
     'error.outOfStock': 'Some items do not have enough stock',

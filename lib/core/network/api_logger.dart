@@ -24,6 +24,10 @@ class ApiLogger extends Interceptor {
 
   static const _startedAt = 'api_logger_started_at';
   static const _maxBodyLength = 2000;
+
+  /// How much of each list is printed. A whole menu would otherwise be encoded in full, on the UI
+  /// isolate, only to be cut off.
+  static const _maxListItems = 10;
   static const _mask = '***';
 
   /// Any JSON key or header whose name contains one of these is masked.
@@ -91,7 +95,7 @@ class ApiLogger extends Interceptor {
   static String _render(Object? body) {
     String text;
     try {
-      text = body is String ? body : jsonEncode(_redact(body));
+      text = body is String ? body : jsonEncode(_redact(body, maxListItems: _maxListItems));
     } on Object {
       text = '$body';
     }
@@ -104,16 +108,23 @@ class ApiLogger extends Interceptor {
   @visibleForTesting
   static Object? redact(Object? value) => _redact(value);
 
-  static Object? _redact(Object? value) {
+  static Object? _redact(Object? value, {int? maxListItems}) {
     if (value is Map) {
       return {
         for (final entry in value.entries)
           '${entry.key}': _secretKey.hasMatch('${entry.key}') && entry.value != null
               ? _mask
-              : _redact(entry.value),
+              : _redact(entry.value, maxListItems: maxListItems),
       };
     }
-    if (value is List) return value.map(_redact).toList();
+    if (value is List) {
+      final shown = maxListItems == null ? value : value.take(maxListItems);
+      return [
+        for (final item in shown) _redact(item, maxListItems: maxListItems),
+        if (maxListItems != null && value.length > maxListItems)
+          '… +${value.length - maxListItems} more',
+      ];
+    }
     return value;
   }
 }

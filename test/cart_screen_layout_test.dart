@@ -55,4 +55,27 @@ void main() {
     );
     expect(tester.getBottomLeft(send).dy, lessThan(852));
   });
+
+  testWidgets('the send bar reaches the bottom edge, its contents above the home indicator', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(top: 59, bottom: 34);
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [activeTableProvider.overrideWith(_CartWithOneItem.new)],
+        child: const MaterialApp(home: CartScreen(floorItemId: 'table-1')),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final footnote = find.text('ชำระเงินที่เครื่อง POS เท่านั้น');
+    final bar = find.ancestor(of: footnote, matching: find.byType(Container)).first;
+    expect(tester.getBottomLeft(bar).dy, 852);
+    // 34 for the indicator and the bar's own 12.
+    expect(tester.getBottomLeft(footnote).dy, 852 - 34 - 12);
+  });
 }

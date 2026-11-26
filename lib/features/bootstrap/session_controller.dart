@@ -91,6 +91,7 @@ class AppSessionController extends Notifier<AppSession> {
       await ref.read(sessionRepositoryProvider).logout();
     } finally {
       state = const AppSession(phase: AppPhase.needsLogin);
+      unawaited(ref.read(localCacheProvider).clear());
     }
   }
 
@@ -98,6 +99,7 @@ class AppSessionController extends Notifier<AppSession> {
     switch (event) {
       case SessionEvent.signedOut:
         unawaited(ref.read(credentialStoreProvider).clear());
+        unawaited(ref.read(localCacheProvider).clear());
         state = const AppSession(phase: AppPhase.needsLogin, notice: 'login.signedOut');
     }
   }
@@ -107,6 +109,16 @@ class AppSessionController extends Notifier<AppSession> {
     if (state.notice != null) state = state.copyWith(notice: null);
   }
 }
+
+/// The branch whose data the app may show and keep, or null while signed out. Everything cached
+/// hangs off this, so it is dropped and reloaded exactly when it changes.
+final signedInBranchProvider = Provider<String?>(
+  (ref) => ref.watch(
+    sessionProvider.select(
+      (s) => s.phase == AppPhase.ready ? (s.session?.branchId ?? '') : null,
+    ),
+  ),
+);
 
 /// The handset's branch/terminal/printing configuration. Read once per sign-in and per launch.
 final configProvider = FutureProvider<StaffAppConfig>((ref) async {

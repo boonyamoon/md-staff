@@ -26,6 +26,20 @@ class ClaimHolder {
         staffName: asString(json['staff_name']),
         expiresAt: asStringOrNull(json['expires_at']),
       );
+
+  @override
+  bool operator ==(Object other) =>
+      other is ClaimHolder &&
+      other.terminalId == terminalId &&
+      other.terminalCode == terminalCode &&
+      other.terminalName == terminalName &&
+      other.staffId == staffId &&
+      other.staffName == staffName &&
+      other.expiresAt == expiresAt;
+
+  @override
+  int get hashCode =>
+      Object.hash(terminalId, terminalCode, terminalName, staffId, staffName, expiresAt);
 }
 
 /// A table's claim as this handset sees it. [leaseToken] is only ever filled in when the claim is
@@ -49,6 +63,17 @@ class ClaimSummary {
         leaseToken: asStringOrNull(json['lease_token']),
         holder: ClaimHolder.fromJson(asMapOrNull(json['holder']) ?? const {}),
       );
+
+  @override
+  bool operator ==(Object other) =>
+      other is ClaimSummary &&
+      other.isMine == isMine &&
+      other.expiresAt == expiresAt &&
+      other.leaseToken == leaseToken &&
+      other.holder == holder;
+
+  @override
+  int get hashCode => Object.hash(isMine, expiresAt, leaseToken, holder);
 }
 
 /// `POST /api/v1/staff-app/tables/:id/claim` and its renew sibling.
@@ -86,6 +111,21 @@ class TableClaim {
   }
 }
 
+/// How far along a table's food is — what the colour of its tile says.
+enum TableFoodStatus {
+  /// Nobody is seated.
+  free,
+
+  /// Seated, nothing sent to the kitchen yet.
+  notOrdered,
+
+  /// At least one dish has not reached the table.
+  waiting,
+
+  /// Every dish ordered has been served.
+  served,
+}
+
 class TableSessionSummary {
   const TableSessionSummary({
     required this.sessionId,
@@ -96,6 +136,7 @@ class TableSessionSummary {
     this.orderId,
     this.itemCount = 0,
     this.totalAmount = 0,
+    this.serverFoodStatus,
   });
 
   final String sessionId;
@@ -107,8 +148,20 @@ class TableSessionSummary {
   final int itemCount;
   final num totalAmount;
 
+  /// `food_status` as the server sent it: `NOT_ORDERED`, `WAITING` or `SERVED`.
+  final String? serverFoodStatus;
+
   /// The cashier has this table's bill open at the POS; a waiter cannot add to it right now.
   bool get isPendingPayment => status == 'PENDING_PAYMENT';
+
+  /// A server that does not send `food_status` still says whether anything was ordered; it just
+  /// cannot say it has all been served.
+  TableFoodStatus get foodStatus => switch (serverFoodStatus) {
+        'NOT_ORDERED' => TableFoodStatus.notOrdered,
+        'WAITING' => TableFoodStatus.waiting,
+        'SERVED' => TableFoodStatus.served,
+        _ => itemCount == 0 ? TableFoodStatus.notOrdered : TableFoodStatus.waiting,
+      };
 
   factory TableSessionSummary.fromJson(Map<String, dynamic> json) => TableSessionSummary(
         sessionId: asString(json['session_id']),
@@ -119,7 +172,37 @@ class TableSessionSummary {
         orderId: asStringOrNull(json['order_id']),
         itemCount: asInt(json['item_count']),
         totalAmount: asNum(json['total_amount']),
+        serverFoodStatus: asStringOrNull(json['food_status']),
       );
+
+  Map<String, dynamic> toCacheJson() => {
+        'session_id': sessionId,
+        'status': status,
+        'opened_at': openedAt,
+        'guest_count': guestCount,
+        'current_round': currentRound,
+        'order_id': orderId,
+        'item_count': itemCount,
+        'total_amount': totalAmount,
+        'food_status': serverFoodStatus,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      other is TableSessionSummary &&
+      other.sessionId == sessionId &&
+      other.status == status &&
+      other.openedAt == openedAt &&
+      other.guestCount == guestCount &&
+      other.currentRound == currentRound &&
+      other.orderId == orderId &&
+      other.itemCount == itemCount &&
+      other.totalAmount == totalAmount &&
+      other.serverFoodStatus == serverFoodStatus;
+
+  @override
+  int get hashCode => Object.hash(sessionId, status, openedAt, guestCount, currentRound, orderId,
+      itemCount, totalAmount, serverFoodStatus);
 }
 
 class FloorTable {
@@ -147,6 +230,44 @@ class FloorTable {
   bool get isOutOfService => status == 'DISABLED';
   bool get isHeldByMe => claim?.isMine ?? false;
   bool get isHeldByOther => claim != null && !claim!.isMine;
+  TableFoodStatus get foodStatus => session?.foodStatus ?? TableFoodStatus.free;
+
+  FloorTable withoutClaim() => FloorTable(
+        floorItemId: floorItemId,
+        label: label,
+        itemType: itemType,
+        status: status,
+        capacity: capacity,
+        sortOrder: sortOrder,
+        session: session,
+      );
+
+  /// Everything but the claim — see `FloorStore`.
+  Map<String, dynamic> toCacheJson() => {
+        'floor_item_id': floorItemId,
+        'label': label,
+        'item_type': itemType,
+        'status': status,
+        'capacity': capacity,
+        'sort_order': sortOrder,
+        'session': session?.toCacheJson(),
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      other is FloorTable &&
+      other.floorItemId == floorItemId &&
+      other.label == label &&
+      other.itemType == itemType &&
+      other.status == status &&
+      other.capacity == capacity &&
+      other.sortOrder == sortOrder &&
+      other.session == session &&
+      other.claim == claim;
+
+  @override
+  int get hashCode =>
+      Object.hash(floorItemId, label, itemType, status, capacity, sortOrder, session, claim);
 
   factory FloorTable.fromJson(Map<String, dynamic> json) {
     final session = asMapOrNull(json['session']);
@@ -184,6 +305,26 @@ class FloorZone {
   final List<FloorTable> tables;
 
   int get freeCount => tableCount - occupiedCount;
+
+  FloorZone withTables(List<FloorTable> tables) => FloorZone(
+        zoneId: zoneId,
+        zoneName: zoneName,
+        sortOrder: sortOrder,
+        colorHex: colorHex,
+        tableCount: tableCount,
+        occupiedCount: occupiedCount,
+        tables: tables,
+      );
+
+  Map<String, dynamic> toCacheJson() => {
+        'zone_id': zoneId,
+        'zone_name': zoneName,
+        'sort_order': sortOrder,
+        'color_hex': colorHex,
+        'table_count': tableCount,
+        'occupied_count': occupiedCount,
+        'tables': [for (final table in tables) table.toCacheJson()],
+      };
 
   factory FloorZone.fromJson(Map<String, dynamic> json) => FloorZone(
         zoneId: asString(json['zone_id']),

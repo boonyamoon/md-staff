@@ -20,6 +20,13 @@ class MeedColors {
   static const Color tableBusy = Color(0xFFFDF2E3);
   static const Color tableLocked = Color(0xFFF2E6E6);
   static const Color tableDisabled = Color(0xFFECECEC);
+
+  /// The ring around a table on the floor, by how far along its food is.
+  static const Color ringFree = Color(0xFFE1E5EA);
+  static const Color ringNotOrdered = Color(0xFF6B7183);
+  static const Color ringWaiting = Color(0xFFF2A33C);
+  static const Color ringServed = Color(0xFF8BC653);
+  static const Color tableText = Color(0xFF5F6676);
 }
 
 /// A `#RRGGBB` (or `AARRGGBB`) string as a colour, or null when it is not one.

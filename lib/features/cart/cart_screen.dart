@@ -10,6 +10,7 @@ import '../../core/widgets/quantity_stepper.dart';
 import '../../core/widgets/states.dart';
 import '../../data/dto/cart_line.dart';
 import '../bootstrap/session_controller.dart';
+import '../menu/menu_catalog_controller.dart';
 import '../tables/active_table_controller.dart';
 import '../tables/table_exit_listener.dart';
 import '../zones/zones_controller.dart';
@@ -38,11 +39,15 @@ class CartScreen extends ConsumerWidget {
                   ? '${t('error.outOfStock')}\n${failure.message}'
                   : failure.code == 'CONCURRENT_MODIFICATION'
                       ? t('error.concurrent')
-                      : failure.message,
+                      : t.failure(failure),
             ),
             duration: const Duration(seconds: 5),
           ),
         );
+        // Refused because the menu moved on: fetch it, so what is picked next is current.
+        if (failure.isMenuOutdated) {
+          unawaited(ref.read(menuCatalogProvider.notifier).refresh());
+        }
         ref.read(activeTableProvider.notifier).acknowledgeFailure();
       }
       return;
@@ -50,7 +55,7 @@ class CartScreen extends ConsumerWidget {
 
     // The floor's totals changed, so refresh it for whoever looks next. Not awaited: the
     // waiter is already walking away from this screen.
-    unawaited(ref.read(zonesProvider.notifier).refresh());
+    unawaited(ref.read(zonesProvider.notifier).refreshAfterChange());
     final printing = ref.read(configProvider).value?.ordering.kitchenPrintingEnabled ?? true;
     final message = round.idempotentReplay
         ? t('cart.alreadySent')
@@ -104,36 +109,34 @@ class CartScreen extends ConsumerWidget {
               ),
           ],
         ),
-        body: SafeArea(
-          child: table.cart.isEmpty
-              ? EmptyView(message: t('cart.empty'), icon: Icons.shopping_basket_outlined)
-              : Column(
-                  children: [
-                    _GuestCountRow(
-                      t: t,
-                      guestCount: table.guestCount,
-                      // A session that is already open took its guest count when it was opened;
-                      // changing it here would be ignored, so the row is read-only by then.
-                      editable: table.detail?.session == null,
-                      onChanged: controller.setGuestCount,
-                    ),
-                    const Divider(height: 1),
-                    Expanded(
-                      child: ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                        itemCount: table.cart.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 10),
-                        itemBuilder: (context, index) => _CartRow(
-                          line: table.cart[index],
-                          t: t,
-                          onQuantityChanged: (value) =>
-                              controller.setQuantity(table.cart[index].lineId, value),
-                        ),
+        body: table.cart.isEmpty
+            ? EmptyView(message: t('cart.empty'), icon: Icons.shopping_basket_outlined)
+            : Column(
+                children: [
+                  _GuestCountRow(
+                    t: t,
+                    guestCount: table.guestCount,
+                    // A session that is already open took its guest count when it was opened;
+                    // changing it here would be ignored, so the row is read-only by then.
+                    editable: table.detail?.session == null,
+                    onChanged: controller.setGuestCount,
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                      itemCount: table.cart.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) => _CartRow(
+                        line: table.cart[index],
+                        t: t,
+                        onQuantityChanged: (value) =>
+                            controller.setQuantity(table.cart[index].lineId, value),
                       ),
                     ),
-                  ],
-                ),
-        ),
+                  ),
+                ],
+              ),
         bottomNavigationBar: table.cart.isEmpty
             ? null
             : _SendBar(
@@ -283,49 +286,48 @@ class _SendBar extends StatelessWidget {
   final VoidCallback onSend;
 
   @override
-  Widget build(BuildContext context) => SafeArea(
-        top: false,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          decoration: const BoxDecoration(
-            color: MeedColors.card,
-            border: Border(top: BorderSide(color: MeedColors.line)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    '$itemCount ${t('common.items')}',
-                    style: const TextStyle(fontSize: 14.5, color: MeedColors.inkSoft),
-                  ),
-                  const Spacer(),
-                  Text(
-                    t.money(total),
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              FilledButton.icon(
-                onPressed: enabled ? onSend : null,
-                icon: sending
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.send_rounded),
-                label: Text(sending ? t('cart.sending') : t('cart.send')),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                t('bill.payAtPos'),
-                style: const TextStyle(fontSize: 12.5, color: MeedColors.inkSoft),
-              ),
-            ],
-          ),
+  Widget build(BuildContext context) => Container(
+        // No SafeArea around the bar: its background runs to the bottom edge, and only what is
+        // in it is lifted clear of the home indicator.
+        padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + MediaQuery.paddingOf(context).bottom),
+        decoration: const BoxDecoration(
+          color: MeedColors.card,
+          border: Border(top: BorderSide(color: MeedColors.line)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Text(
+                  '$itemCount ${t('common.items')}',
+                  style: const TextStyle(fontSize: 14.5, color: MeedColors.inkSoft),
+                ),
+                const Spacer(),
+                Text(
+                  t.money(total),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: enabled ? onSend : null,
+              icon: sending
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.send_rounded),
+              label: Text(sending ? t('cart.sending') : t('cart.send')),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              t('bill.payAtPos'),
+              style: const TextStyle(fontSize: 12.5, color: MeedColors.inkSoft),
+            ),
+          ],
         ),
       );
 }

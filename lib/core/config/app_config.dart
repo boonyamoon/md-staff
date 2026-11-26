@@ -25,6 +25,16 @@ class AppConfig {
   /// `claim_renew_after_ms`, which wins when present — this is only the pre-config default.
   static const Duration defaultClaimRenewInterval = Duration(seconds: 60);
 
-  /// Sold-out polling on the menu screen, matching the kiosk's ~20 s availability poll.
-  static const Duration menuAvailabilityPollInterval = Duration(seconds: 20);
+  // Nothing is polled. These are how old the offline copy may get before the next natural moment
+  // — opening the app, returning to it, entering a screen — fetches it again. Pulling down
+  // always fetches.
+
+  /// The floor: other devices change it all through service.
+  static const Duration floorMaxAge = Duration(seconds: 60);
+
+  /// Which dishes are sold out, checked on entering the menu. The server checks again on send.
+  static const Duration availabilityMaxAge = Duration(minutes: 2);
+
+  /// The menu itself, which changes rarely.
+  static const Duration menuMaxAge = Duration(hours: 6);
 }

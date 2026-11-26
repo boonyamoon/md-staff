@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/l10n/strings.dart';
 import '../../core/theme/app_theme.dart';
 import '../../router/app_router.dart';
+import '../zones/zones_controller.dart';
 import 'active_table_controller.dart';
 
 /// Wraps the table's screens and gets the waiter off them the moment the table stops being theirs.
@@ -51,6 +54,8 @@ class _TableExitListenerState extends ConsumerState<TableExitListener> {
       ),
     );
     if (!mounted) return;
+    // Someone else changed this table, so the floor on the way back is fetched again.
+    unawaited(ref.read(zonesProvider.notifier).refresh());
     AppRoutes.goZones(context);
   }
 

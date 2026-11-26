@@ -6,6 +6,7 @@ import '../../core/l10n/strings.dart';
 import '../../core/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../bootstrap/session_controller.dart';
+import '../menu/menu_catalog_controller.dart';
 
 /// Where it is, who is on it, which language, and the two destructive actions: end the shift, and
 /// unpair the handset.
@@ -94,6 +95,8 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
+            const _MenuDataCard(),
+            const SizedBox(height: 16),
             Card(
               child: RadioGroup<AppLanguage>(
                 groupValue: language,
@@ -148,6 +151,40 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// How old the menu on this handset is, and the button that fetches it again.
+class _MenuDataCard extends ConsumerWidget {
+  const _MenuDataCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(stringsProvider);
+    final menu = ref.watch(menuCatalogProvider);
+    final fetchedAt = menu.fetchedAt;
+    final failure = menu.failure;
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.restaurant_menu_rounded),
+        title: Text(t('settings.menuData')),
+        subtitle: Text(
+          failure != null
+              ? t.failure(failure)
+              : fetchedAt == null
+                  ? t('settings.neverUpdated')
+                  : '${t('settings.updatedAt')} '
+                      '${t.time(fetchedAt, now: ref.watch(clockProvider)())}',
+        ),
+        trailing: menu.refreshing
+            ? const SizedBox.square(
+                dimension: 22,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              )
+            : const Icon(Icons.refresh_rounded),
+        onTap: menu.refreshing ? null : () => ref.read(menuCatalogProvider.notifier).refresh(),
       ),
     );
   }

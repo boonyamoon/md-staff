@@ -5,6 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../data/local/floor_store.dart';
+import '../data/local/local_cache.dart';
+import '../data/local/menu_store.dart';
 import '../data/repositories/floor_repository.dart';
 import '../data/repositories/menu_repository.dart';
 import '../data/repositories/session_repository.dart';
@@ -38,6 +41,19 @@ final floorRepositoryProvider = Provider<FloorRepository>(
 final menuRepositoryProvider = Provider<MenuRepository>(
   (ref) => MenuRepository(api: ref.watch(apiClientProvider)),
 );
+
+final localCacheProvider = Provider<LocalCache>((ref) => FileLocalCache());
+
+final floorStoreProvider = Provider<FloorStore>(
+  (ref) => FloorStore(ref.watch(localCacheProvider)),
+);
+
+final menuStoreProvider = Provider<MenuStore>(
+  (ref) => MenuStore(ref.watch(localCacheProvider)),
+);
+
+/// The current time, replaceable so tests can age the offline copies.
+final clockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
 
 final appVersionProvider = FutureProvider<String>((ref) async {
   final info = await PackageInfo.fromPlatform();

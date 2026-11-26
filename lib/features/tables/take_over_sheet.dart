@@ -45,11 +45,12 @@ class _TakeOverSheetState extends ConsumerState<_TakeOverSheet> {
     super.dispose();
   }
 
+  // The refusal names whoever holds the table now; the floor's copy may be older.
   String get _holderName =>
-      widget.table.claim?.holder.staffName ?? widget.failure?.holder?.staffName ?? '';
+      widget.failure?.holder?.staffName ?? widget.table.claim?.holder.staffName ?? '';
 
   String get _holderTerminal =>
-      widget.table.claim?.holder.terminalName ?? widget.failure?.holder?.terminalName ?? '';
+      widget.failure?.holder?.terminalName ?? widget.table.claim?.holder.terminalName ?? '';
 
   Future<void> _takeOver() async {
     final t = ref.read(stringsProvider);

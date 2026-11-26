@@ -20,6 +20,18 @@ class ApiFailure implements Exception {
   bool get isOffline =>
       code == 'NETWORK_UNREACHABLE' || code == 'TIMEOUT' || code == 'CONNECTION_FAILED';
 
+  /// The server answered 404 for the path itself: it does not have this endpoint (yet), as
+  /// opposed to not finding a table or a product.
+  bool get isMissingRoute =>
+      statusCode == 404 && message.toLowerCase().contains('route not found');
+
+  /// The order was refused because the menu on this handset is out of date.
+  bool get isMenuOutdated =>
+      code == 'INSUFFICIENT_STOCK' ||
+      code == 'INVALID_SKU' ||
+      code == 'SKU_PRICE_NOT_CONFIGURED' ||
+      code == 'OPTION_PRICE_NOT_CONFIGURED';
+
   /// The access token ran out. A refresh cue, NOT a sign-out: the handset's sign-in is permanent
   /// and only [endsSession] below means "ask someone to sign in again".
   bool get isTokenExpired => code == 'STAFF_APP_TOKEN_EXPIRED';

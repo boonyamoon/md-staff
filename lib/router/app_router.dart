@@ -9,8 +9,7 @@ import '../features/menu/menu_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/setup/setup_screen.dart';
 import '../features/tables/table_bill_screen.dart';
-import '../features/tables/tables_screen.dart';
-import '../features/zones/zones_screen.dart';
+import '../features/zones/floor_screen.dart';
 
 /// Every path in the app, and the only way to navigate between them.
 class AppRoutes {
@@ -21,13 +20,11 @@ class AppRoutes {
   static const zones = '/zones';
   static const settings = '/settings';
 
-  static String zone(String zoneId) => '/zones/$zoneId';
   static String menu(String floorItemId) => '/table/$floorItemId';
   static String cart(String floorItemId) => '/table/$floorItemId/cart';
   static String bill(String floorItemId) => '/table/$floorItemId/bill';
 
   static void goZones(BuildContext context) => context.go(zones);
-  static void goZone(BuildContext context, String zoneId) => context.push(zone(zoneId));
   static void goMenu(BuildContext context, String floorItemId) => context.push(menu(floorItemId));
   static void goCart(BuildContext context, String floorItemId) => context.push(cart(floorItemId));
   static void goBill(BuildContext context, String floorItemId) => context.push(bill(floorItemId));
@@ -62,17 +59,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: AppRoutes.splash, builder: (context, state) => const SplashScreen()),
       GoRoute(path: AppRoutes.setup, builder: (context, state) => const SetupScreen()),
-      GoRoute(
-        path: AppRoutes.zones,
-        builder: (context, state) => const ZonesScreen(),
-        routes: [
-          GoRoute(
-            path: ':zoneId',
-            builder: (context, state) =>
-                TablesScreen(zoneId: state.pathParameters['zoneId'] ?? ''),
-          ),
-        ],
-      ),
+      GoRoute(path: AppRoutes.zones, builder: (context, state) => const FloorScreen()),
       GoRoute(
         path: '/table/:floorItemId',
         builder: (context, state) =>

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/l10n/strings.dart';
 import 'core/theme/app_theme.dart';
+import 'features/bootstrap/sync_on_resume.dart';
 import 'features/bootstrap/theme_color_provider.dart';
 import 'router/app_router.dart';
 
@@ -25,11 +26,13 @@ class MdStaffApp extends ConsumerWidget {
       // MaterialLocalizations (TextField, dialogs, tooltips…) throws under the Thai locale.
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       supportedLocales: AppLanguage.values.map((l) => l.locale).toList(),
-      builder: (context, child) => MediaQuery.withClampedTextScaling(
-        // A handset is read at arm's length in a dim room, so the app's own type is already
-        // large; letting the OS scale it past 1.3 pushes table tiles and the send bar off screen.
-        maxScaleFactor: 1.3,
-        child: child ?? const SizedBox.shrink(),
+      builder: (context, child) => SyncOnResume(
+        child: MediaQuery.withClampedTextScaling(
+          // A handset is read at arm's length in a dim room, so the app's own type is already
+          // large; letting the OS scale it past 1.3 pushes table tiles and the send bar off screen.
+          maxScaleFactor: 1.3,
+          child: child ?? const SizedBox.shrink(),
+        ),
       ),
     );
   }

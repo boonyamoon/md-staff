@@ -145,8 +145,19 @@ void main() {
       verifyNever(() => floor.claim(any()));
     });
 
-    test('surfaces the holder when another handset has the table', () async {
+    test('does not try to claim a table already shown as another handset\'s', () async {
       when(() => floor.table(_table)).thenAnswer((_) async => detail(claim: _theirs));
+
+      expect(await controller().open(_table), isFalse);
+      expect(state().failure!.code, 'TABLE_CLAIM_HELD');
+      expect(state().failure!.holder!.staffName, 'Dao');
+      expect(state().holdsClaim, isFalse);
+      // A refused claim would count against the manager-PIN rate limit.
+      verifyNever(() => floor.claim(any()));
+    });
+
+    test('surfaces the holder when another handset wins the claim', () async {
+      when(() => floor.table(_table)).thenAnswer((_) async => detail());
       when(() => floor.claim(_table)).thenThrow(
         const ApiFailure(
           code: 'TABLE_CLAIM_HELD',

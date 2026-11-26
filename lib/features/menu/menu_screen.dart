@@ -1,14 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/l10n/strings.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/product_thumb.dart';
+import '../../core/widgets/stale_banner.dart';
 import '../../core/widgets/states.dart';
 import '../../data/dto/menu_dto.dart';
 import '../../router/app_router.dart';
 import '../tables/active_table_controller.dart';
 import '../tables/table_exit_listener.dart';
+import '../zones/zones_controller.dart';
+import 'menu_catalog_controller.dart';
 import 'menu_controller.dart';
 import 'product_options_sheet.dart';
 
@@ -26,35 +31,31 @@ class MenuScreen extends ConsumerStatefulWidget {
 }
 
 class _MenuScreenState extends ConsumerState<MenuScreen> {
-  final _scrollController = ScrollController();
   final _searchController = TextEditingController();
   bool _searching = false;
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
+    // Sold-out dishes are checked on the way in, when the last check is old — not on a timer.
+    Future.microtask(() {
+      if (mounted) {
+        unawaited(ref.read(menuCatalogProvider.notifier).refreshAvailabilityIfStale());
+      }
+    });
   }
 
   @override
   void dispose() {
-    _scrollController
-      ..removeListener(_onScroll)
-      ..dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  void _onScroll() {
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 320) {
-      ref.read(menuProvider.notifier).loadMore();
-    }
-  }
-
   /// Leaving the table gives its claim back, so the next waiter can take it at once.
   Future<void> _leaveTable() async {
+    final floor = ref.read(zonesProvider.notifier);
     await ref.read(activeTableProvider.notifier).close();
+    unawaited(floor.tableReleased(widget.floorItemId));
     if (mounted) AppRoutes.goZones(context);
   }
 
@@ -71,7 +72,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   @override
   Widget build(BuildContext context) {
     final t = ref.watch(stringsProvider);
-    final menu = ref.watch(menuProvider);
+    final menu = ref.watch(menuCatalogProvider);
+    final filter = ref.watch(menuProvider);
     final table = ref.watch(activeTableProvider);
 
     return TableExitListener(
@@ -131,30 +133,37 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               ),
             ],
           ),
-          body: Column(
-            children: [
-              _CategoryBar(menu: menu, t: t),
-              const Divider(height: 1),
-              Expanded(
-                child: switch (menu) {
-                  MenuState(loading: true, products: []) => const LoadingView(),
-                  MenuState(failure: final failure?, products: []) => ErrorView(
-                      failure: failure,
+          body: menu.catalog == null
+              ? (menu.failure != null && !menu.refreshing
+                  ? ErrorView(
+                      failure: menu.failure!,
                       retryLabel: t('common.retry'),
-                      onRetry: ref.read(menuProvider.notifier).load,
-                    ),
-                  MenuState(products: []) =>
-                    EmptyView(message: t('menu.empty'), icon: Icons.search_off_rounded),
-                  _ => _ProductList(
-                      menu: menu,
+                      onRetry: () => ref.read(menuCatalogProvider.notifier).refresh(),
+                    )
+                  : const LoadingView())
+              : Column(
+                  children: [
+                    _CategoryBar(
+                      categories: menu.catalog!.categories,
+                      selectedId: filter.categoryId,
                       t: t,
-                      scrollController: _scrollController,
-                      onTap: _addProduct,
                     ),
-                },
-              ),
-            ],
-          ),
+                    const Divider(height: 1),
+                    if (menu.failure != null)
+                      StaleBanner(failure: menu.failure!, fetchedAt: menu.fetchedAt),
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: () => ref.read(menuCatalogProvider.notifier).refresh(),
+                        child: _ProductList(
+                          // A new category starts at the top of its list.
+                          key: ValueKey(filter.categoryId),
+                          t: t,
+                          onTap: _addProduct,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
           bottomNavigationBar: table.cart.isEmpty
               ? null
               : _CartBar(
@@ -170,14 +179,15 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
 }
 
 class _CategoryBar extends ConsumerWidget {
-  const _CategoryBar({required this.menu, required this.t});
+  const _CategoryBar({required this.categories, required this.selectedId, required this.t});
 
-  final MenuState menu;
+  final List<MenuCategory> categories;
+  final String? selectedId;
   final AppStrings t;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (menu.categories.isEmpty) return const SizedBox.shrink();
+    if (categories.isEmpty) return const SizedBox.shrink();
     final controller = ref.read(menuProvider.notifier);
     return SizedBox(
       height: 56,
@@ -187,13 +197,13 @@ class _CategoryBar extends ConsumerWidget {
         children: [
           _CategoryChip(
             label: t('menu.all'),
-            selected: menu.categoryId == null,
+            selected: selectedId == null,
             onTap: () => controller.selectCategory(null),
           ),
-          for (final category in menu.categories)
+          for (final category in categories)
             _CategoryChip(
               label: category.categoryName,
-              selected: menu.categoryId == category.id,
+              selected: selectedId == category.id,
               onTap: () => controller.selectCategory(category.id),
             ),
         ],
@@ -243,39 +253,41 @@ class _CategoryChip extends StatelessWidget {
       );
 }
 
-class _ProductList extends StatelessWidget {
-  const _ProductList({
-    required this.menu,
-    required this.t,
-    required this.scrollController,
-    required this.onTap,
-  });
+class _ProductList extends ConsumerWidget {
+  const _ProductList({super.key, required this.t, required this.onTap});
 
-  final MenuState menu;
   final AppStrings t;
-  final ScrollController scrollController;
   final ValueChanged<MenuProduct> onTap;
 
   @override
-  Widget build(BuildContext context) => ListView.separated(
-        controller: scrollController,
-        // The list runs to the bottom edge, under the home indicator; the inset is added to the
-        // scroll padding so the last product can still be scrolled clear of it. It is zero while
-        // the cart bar is showing, which takes that space itself.
-        padding: EdgeInsets.fromLTRB(16, 12, 16, 20 + MediaQuery.paddingOf(context).bottom),
-        itemCount: menu.products.length + (menu.loadingMore ? 1 : 0),
-        separatorBuilder: (_, _) => const SizedBox(height: 10),
-        itemBuilder: (context, index) {
-          if (index >= menu.products.length) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: CircularProgressIndicator()),
-            );
-          }
-          final product = menu.products[index];
-          return _ProductRow(product: product, t: t, onTap: () => onTap(product));
-        },
+  Widget build(BuildContext context, WidgetRef ref) {
+    final products = ref.watch(visibleProductsProvider);
+    if (products.isEmpty) {
+      // Still scrollable, so it can be pulled down to ask the server again.
+      return CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: EmptyView(message: t('menu.empty'), icon: Icons.search_off_rounded),
+          ),
+        ],
       );
+    }
+    return ListView.separated(
+      physics: const AlwaysScrollableScrollPhysics(),
+      // The list runs to the bottom edge, under the home indicator; the inset is added to the
+      // scroll padding so the last product can still be scrolled clear of it. It is zero while
+      // the cart bar is showing, which takes that space itself.
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 20 + MediaQuery.paddingOf(context).bottom),
+      itemCount: products.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        final product = products[index];
+        return _ProductRow(product: product, t: t, onTap: () => onTap(product));
+      },
+    );
+  }
 }
 
 class _ProductRow extends StatelessWidget {

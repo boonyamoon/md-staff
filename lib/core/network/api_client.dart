@@ -179,6 +179,33 @@ class ApiClient {
             options: _options(staffBearer: staffBearer),
           ));
 
+  /// A GET that sends the ETag of the copy already held, so an unchanged answer costs a few bytes
+  /// instead of the whole body.
+  Future<ConditionalResponse> getIfChanged(String path, {String? etag}) async {
+    try {
+      final response = await _dio.get<dynamic>(
+        path,
+        options: Options(
+          headers: etag == null ? null : {'If-None-Match': etag},
+          validateStatus: (status) =>
+              status != null && ((status >= 200 && status < 300) || status == 304),
+        ),
+      );
+      if (response.statusCode == 304) return ConditionalResponse(etag: etag);
+      final body = response.data;
+      if (body is Map<Object?, Object?>) {
+        return ConditionalResponse(
+          body: Map<String, dynamic>.from(body),
+          etag: response.headers.value('etag'),
+        );
+      }
+      throw const ApiFailure(code: 'MALFORMED_RESPONSE', message: 'Unexpected answer from the server');
+    } on DioException catch (error) {
+      final inner = error.error;
+      throw inner is ApiFailure ? inner : ApiFailure.fromDio(error);
+    }
+  }
+
   Future<Map<String, dynamic>> post(
     String path, {
     Object? body,
@@ -210,6 +237,17 @@ class ApiClient {
       throw inner is ApiFailure ? inner : ApiFailure.fromDio(error);
     }
   }
+}
+
+/// What [ApiClient.getIfChanged] got back.
+class ConditionalResponse {
+  const ConditionalResponse({this.body, this.etag});
+
+  /// Null when the server answered 304: the copy already held is still current.
+  final Map<String, dynamic>? body;
+  final String? etag;
+
+  bool get notModified => body == null;
 }
 
 /// Unwraps the `{ success, data }` envelope the staff-app endpoints answer with.

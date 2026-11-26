@@ -144,6 +144,29 @@ class ActiveTableController extends Notifier<ActiveTableState> {
         return false;
       }
 
+      final theirs = detail.claim;
+      if (theirs != null && !theirs.isMine) {
+        // Known to be someone else's already. Asking to claim it would only be refused, and the
+        // server counts refused claims against the manager-PIN rate limit.
+        state = state.copyWith(
+          detail: detail,
+          loading: false,
+          failure: ApiFailure(
+            code: 'TABLE_CLAIM_HELD',
+            message: '${theirs.holder.staffName} is taking orders at ${detail.label}',
+            statusCode: 409,
+            data: {
+              'holder': {
+                'staff_name': theirs.holder.staffName,
+                'terminal_name': theirs.holder.terminalName,
+                'terminal_code': theirs.holder.terminalCode,
+              },
+            },
+          ),
+        );
+        return false;
+      }
+
       final existingLease = detail.myLeaseToken;
       final claim = existingLease != null
           ? TableClaim(
@@ -214,6 +237,11 @@ class ActiveTableController extends Notifier<ActiveTableState> {
     } on ApiFailure catch (failure) {
       state = state.copyWith(failure: failure);
     }
+  }
+
+  /// A fresher read of the open table, fetched by the bill screen.
+  void adoptDetail(TableDetail detail) {
+    if (detail.floorItemId == state.floorItemId) state = state.copyWith(detail: detail);
   }
 
   // ── Cart ──

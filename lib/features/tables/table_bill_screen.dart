@@ -2,11 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/l10n/strings.dart';
+import '../../core/network/api_failure.dart';
+import '../../core/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/states.dart';
 import '../../data/dto/order_dto.dart';
 import 'active_table_controller.dart';
 import 'table_exit_listener.dart';
+
+/// What has been sent to the kitchen at a table, asked of the server on every visit and never
+/// kept: other handsets, the POS and the guests' own phones all add to it, and the kitchen moves
+/// each dish along.
+final tableBillProvider = FutureProvider.autoDispose.family<TableDetail, String>(
+  (ref, floorItemId) => ref.watch(floorRepositoryProvider).table(floorItemId),
+  retry: (_, _) => null,
+);
 
 /// Everything already sent to the kitchen at this table, round by round, with the running total.
 ///
@@ -22,69 +32,125 @@ class TableBillScreen extends ConsumerStatefulWidget {
 }
 
 class _TableBillScreenState extends ConsumerState<TableBillScreen> {
+  late final AppLifecycleListener _lifecycle;
+
   @override
   void initState() {
     super.initState();
-    // The totals may have moved since the floor was loaded — the cashier may have discounted the
-    // bill, or a QR customer at the same table may have added a round.
-    Future.microtask(() => ref.read(activeTableProvider.notifier).refreshDetail());
+    _lifecycle = AppLifecycleListener(
+      onResume: () => ref.invalidate(tableBillProvider(widget.floorItemId)),
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  Future<void> _reload() async {
+    try {
+      final _ = await ref.refresh(tableBillProvider(widget.floorItemId).future);
+    } on Object {
+      // Shown by the screen itself, from the provider's state.
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final t = ref.watch(stringsProvider);
-    final table = ref.watch(activeTableProvider);
-    final order = table.detail?.order;
+    final provider = tableBillProvider(widget.floorItemId);
+    // The table screens read the same table (its round number), so they get the fresh copy too.
+    ref.listen(provider, (previous, next) {
+      final detail = next.value;
+      if (detail != null && !next.isLoading && !next.hasError) {
+        ref.read(activeTableProvider.notifier).adoptDetail(detail);
+      }
+    });
+    final bill = ref.watch(provider);
+    final label = ref.watch(activeTableProvider.select((s) => s.tableLabel));
+    // After a failed reload the older bill is not shown: it would read as the current one.
+    final failed = bill.hasError && !bill.isLoading;
+    final order = failed ? null : bill.value?.order;
+
+    final Widget body;
+    if (failed) {
+      final error = bill.error!;
+      body = ErrorView(
+        failure: error is ApiFailure
+            ? error
+            : ApiFailure(code: 'UNKNOWN', message: error.toString()),
+        retryLabel: t('common.retry'),
+        onRetry: () => ref.invalidate(provider),
+      );
+    } else if (!bill.hasValue || bill.hasError) {
+      // Still loading — including a retry, which must not fall back to the older bill meanwhile.
+      body = const LoadingView();
+    } else {
+      body = Column(
+        children: [
+          if (bill.isLoading) const LinearProgressIndicator(minHeight: 2),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _reload,
+              child: order == null || order.activeLines.isEmpty
+                  ? CustomScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      slivers: [
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: EmptyView(
+                            message: t('bill.empty'),
+                            icon: Icons.receipt_long_outlined,
+                          ),
+                        ),
+                      ],
+                    )
+                  : _Bill(order: order, t: t),
+            ),
+          ),
+        ],
+      );
+    }
 
     return TableExitListener(
       floorItemId: widget.floorItemId,
       child: Scaffold(
-        appBar: AppBar(title: Text('${t('bill.title')} · ${table.tableLabel}')),
-        body: SafeArea(
-          child: RefreshIndicator(
-            onRefresh: () => ref.read(activeTableProvider.notifier).refreshDetail(),
-            child: order == null || order.activeLines.isEmpty
-                ? ListView(
-                    children: [
-                      SizedBox(
-                        height: MediaQuery.sizeOf(context).height * 0.6,
-                        child: EmptyView(
-                          message: t('bill.empty'),
-                          icon: Icons.receipt_long_outlined,
-                        ),
-                      ),
-                    ],
-                  )
-                : _Bill(order: order, t: t),
-          ),
-        ),
-        bottomNavigationBar: order == null
-            ? null
-            : SafeArea(
-                top: false,
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                  decoration: const BoxDecoration(
-                    color: MeedColors.card,
-                    border: Border(top: BorderSide(color: MeedColors.line)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.point_of_sale_rounded, size: 18, color: MeedColors.inkSoft),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          t('bill.payAtPos'),
-                          style: const TextStyle(fontSize: 13.5, color: MeedColors.inkSoft),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+        appBar: AppBar(title: Text('${t('bill.title')} · $label')),
+        body: body,
+        bottomNavigationBar: order == null ? null : _PayAtPosBar(t: t),
       ),
     );
   }
+}
+
+class _PayAtPosBar extends StatelessWidget {
+  const _PayAtPosBar({required this.t});
+
+  final AppStrings t;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        // No SafeArea around the bar: its background runs to the bottom edge, and only what is
+        // in it is lifted clear of the home indicator.
+        padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + MediaQuery.paddingOf(context).bottom),
+        decoration: const BoxDecoration(
+          color: MeedColors.card,
+          border: Border(top: BorderSide(color: MeedColors.line)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.point_of_sale_rounded, size: 18, color: MeedColors.inkSoft),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                t('bill.payAtPos'),
+                style: const TextStyle(fontSize: 13.5, color: MeedColors.inkSoft),
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class _Bill extends StatelessWidget {
@@ -97,6 +163,7 @@ class _Bill extends StatelessWidget {
   Widget build(BuildContext context) {
     final rounds = order.linesByRound;
     return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
         Text(
