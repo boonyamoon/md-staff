@@ -142,6 +142,52 @@ void main() {
     verifyNever(() => repository.productDetail(any()));
   });
 
+  testWidgets('searching opens a field that can be cleared or cancelled', (tester) async {
+    await store(age: const Duration(hours: 1));
+    tester.view.physicalSize = const Size(360, 720);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(() {
+      tester.view.reset();
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+    });
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: overrides().cast(),
+        child: MaterialApp(theme: buildAppTheme(), home: const MenuScreen(floorItemId: 'f1')),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.search_rounded));
+    await tester.pumpAndSettle();
+    // Room above and below the field inside the bar, even at the largest text size.
+    final field = tester.getRect(find.byType(TextField));
+    final bar = tester.getRect(find.byType(AppBar));
+    expect(field.top - bar.top, greaterThanOrEqualTo(4));
+    expect(bar.bottom - field.bottom, greaterThanOrEqualTo(4));
+    expect(find.byIcon(Icons.cancel_rounded), findsNothing);
+
+    await tester.enterText(find.byType(TextField), 'tea');
+    await tester.pumpAndSettle();
+    // The clear button appearing must not make the field grow.
+    expect(tester.getRect(find.byType(TextField)).height, field.height);
+    expect(find.text('Pad Thai'), findsNothing);
+    expect(find.text('Thai tea'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.cancel_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text('Pad Thai'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'tea');
+    await tester.tap(find.text('ยกเลิก'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('Pad Thai'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the menu screen polls nothing, however long it stays open', (tester) async {
     await store(age: const Duration(hours: 1));
     await tester.pumpWidget(

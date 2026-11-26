@@ -59,6 +59,12 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     if (mounted) AppRoutes.goZones(context);
   }
 
+  void _closeSearch() {
+    setState(() => _searching = false);
+    _searchController.clear();
+    ref.read(menuProvider.notifier).search('');
+  }
+
   Future<void> _addProduct(MenuProduct product) async {
     final controller = ref.read(activeTableProvider.notifier);
     if (!product.needsChoices) {
@@ -91,17 +97,13 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               icon: const Icon(Icons.arrow_back_rounded),
               onPressed: _leaveTable,
             ),
+            // The search box starts right after the back arrow and takes the width.
+            titleSpacing: _searching ? 0 : null,
             title: _searching
-                ? TextField(
+                ? _SearchField(
                     controller: _searchController,
-                    autofocus: true,
+                    hint: t('menu.searchPlaceholder'),
                     onChanged: ref.read(menuProvider.notifier).search,
-                    decoration: InputDecoration(
-                      hintText: t('menu.searchPlaceholder'),
-                      border: InputBorder.none,
-                      filled: false,
-                      contentPadding: EdgeInsets.zero,
-                    ),
                   )
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -115,23 +117,25 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                         ),
                     ],
                   ),
-            actions: [
-              IconButton(
-                icon: Icon(_searching ? Icons.close_rounded : Icons.search_rounded),
-                onPressed: () {
-                  setState(() => _searching = !_searching);
-                  if (!_searching) {
-                    _searchController.clear();
-                    ref.read(menuProvider.notifier).search('');
-                  }
-                },
-              ),
-              IconButton(
-                tooltip: t('bill.title'),
-                icon: const Icon(Icons.receipt_long_outlined),
-                onPressed: () => AppRoutes.goBill(context, widget.floorItemId),
-              ),
-            ],
+            actions: _searching
+                ? [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: TextButton(onPressed: _closeSearch, child: Text(t('common.cancel'))),
+                    ),
+                  ]
+                : [
+                    IconButton(
+                      tooltip: t('common.search'),
+                      icon: const Icon(Icons.search_rounded),
+                      onPressed: () => setState(() => _searching = true),
+                    ),
+                    IconButton(
+                      tooltip: t('bill.title'),
+                      icon: const Icon(Icons.receipt_long_outlined),
+                      onPressed: () => AppRoutes.goBill(context, widget.floorItemId),
+                    ),
+                  ],
           ),
           body: menu.catalog == null
               ? (menu.failure != null && !menu.refreshing
@@ -176,6 +180,65 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       ),
     );
   }
+}
+
+/// The menu's search box: a rounded, filled field with room around what is typed.
+class _SearchField extends StatelessWidget {
+  const _SearchField({required this.controller, required this.hint, required this.onChanged});
+
+  final TextEditingController controller;
+  final String hint;
+  final ValueChanged<String> onChanged;
+
+  static const _shape = OutlineInputBorder(
+    borderRadius: BorderRadius.all(Radius.circular(22)),
+    borderSide: BorderSide(color: MeedColors.line),
+  );
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<TextEditingValue>(
+        valueListenable: controller,
+        builder: (context, value, _) => TextField(
+          controller: controller,
+          autofocus: true,
+          onChanged: onChanged,
+          textInputAction: TextInputAction.search,
+          textAlignVertical: TextAlignVertical.center,
+          // The line height leaves room for Thai vowel and tone marks.
+          style: const TextStyle(fontSize: 16, height: 1.3, color: MeedColors.ink),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(color: MeedColors.inkSoft),
+            isDense: true,
+            filled: true,
+            fillColor: MeedColors.surface,
+            // 40 high in the 56 bar, leaving 8 above and below.
+            contentPadding: const EdgeInsets.fromLTRB(2, 9, 14, 9),
+            prefixIcon: const Icon(Icons.search_rounded, size: 21, color: MeedColors.inkSoft),
+            prefixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            suffixIcon: value.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: MaterialLocalizations.of(context).deleteButtonTooltip,
+                    icon: const Icon(Icons.cancel_rounded, size: 20, color: MeedColors.inkSoft),
+                    // Fitted to the field, whose height it must not stretch.
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                    style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                    onPressed: () {
+                      controller.clear();
+                      onChanged('');
+                    },
+                  ),
+            suffixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            border: _shape,
+            enabledBorder: _shape,
+            focusedBorder: _shape.copyWith(
+              borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.5),
+            ),
+          ),
+        ),
+      );
 }
 
 class _CategoryBar extends ConsumerWidget {
