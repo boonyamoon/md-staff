@@ -68,7 +68,14 @@ class _TableBillScreenState extends ConsumerState<TableBillScreen> {
       }
     });
     final bill = ref.watch(provider);
-    final label = ref.watch(activeTableProvider.select((s) => s.tableLabel));
+    // From the bill itself, which may be read without holding the table; the held table's label
+    // covers the moment before it arrives.
+    final held = ref.watch(
+      activeTableProvider.select(
+        (s) => s.floorItemId == widget.floorItemId ? s.tableLabel : '',
+      ),
+    );
+    final label = bill.value?.label ?? held;
     // After a failed reload the older bill is not shown: it would read as the current one.
     final failed = bill.hasError && !bill.isLoading;
     final order = failed ? null : bill.value?.order;
@@ -267,7 +274,7 @@ class _LineRow extends StatelessWidget {
                     ),
                   if (line.kitchenStatus != null) ...[
                     const SizedBox(height: 4),
-                    _KitchenBadge(status: line.kitchenStatus!),
+                    _KitchenBadge(status: line.kitchenStatus!, t: t),
                   ],
                 ],
               ),
@@ -283,9 +290,17 @@ class _LineRow extends StatelessWidget {
 }
 
 class _KitchenBadge extends StatelessWidget {
-  const _KitchenBadge({required this.status});
+  const _KitchenBadge({required this.status, required this.t});
 
   final String status;
+  final AppStrings t;
+
+  /// The stage in words; a status this app does not know is shown as the server sent it.
+  String get _label {
+    final key = 'kitchen.${status.toLowerCase()}';
+    final label = t(key);
+    return label == key ? status : label;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -295,7 +310,7 @@ class _KitchenBadge extends StatelessWidget {
           Theme.of(context).colorScheme.primaryStrong,
         ),
       'SERVED' => (MeedColors.tableFree, MeedColors.inkSoft),
-      'PREPARING' => (MeedColors.tableBusy, const Color(0xFF7D5A1E)),
+      'SENT' || 'PREPARING' => (MeedColors.tableBusy, const Color(0xFF7D5A1E)),
       'CANCELLED' => (MeedColors.tableLocked, MeedColors.danger),
       _ => (MeedColors.surface, MeedColors.inkSoft),
     };
@@ -303,7 +318,7 @@ class _KitchenBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(6)),
       child: Text(
-        status,
+        _label,
         style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: foreground),
       ),
     );

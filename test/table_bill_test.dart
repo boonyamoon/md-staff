@@ -76,6 +76,34 @@ void main() {
     verify(() => floor.table('f1')).called(2);
   });
 
+  testWidgets('names each dish’s kitchen stage in the waiter’s language', (tester) async {
+    when(() => floor.table('f1')).thenAnswer(
+      (_) async => const TableDetail(
+        floorItemId: 'f1',
+        label: 'A1',
+        zoneId: 'z1',
+        zoneName: 'Terrace',
+        order: TableOrder(
+          orderId: 'o1',
+          orderNumber: 'ST-1',
+          status: 'HELD',
+          lines: [
+            OrderLine(orderItemId: '1', skuId: 's', productName: 'Pad Thai', kitchenStatus: 'SENT'),
+            OrderLine(orderItemId: '2', skuId: 's', productName: 'Tea', kitchenStatus: 'PENDING'),
+            OrderLine(orderItemId: '3', skuId: 's', productName: 'Rice', kitchenStatus: 'HELD_BACK'),
+          ],
+        ),
+      ),
+    );
+    await pumpHost(tester);
+    await visit(tester);
+
+    expect(find.text('ส่งเข้าครัวแล้ว'), findsOneWidget);
+    expect(find.text('รอส่งเข้าครัว'), findsOneWidget);
+    // Unknown to this app, so shown as sent by the server.
+    expect(find.text('HELD_BACK'), findsOneWidget);
+  });
+
   testWidgets('shows the failure rather than an older bill, and can retry', (tester) async {
     var offline = false;
     when(() => floor.table('f1')).thenAnswer((_) async {

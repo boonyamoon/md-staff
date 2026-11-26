@@ -43,12 +43,20 @@ class TableTile extends ConsumerWidget {
 
     final disabled = table.isOutOfService;
     final pendingPayment = table.session?.isPendingPayment ?? false;
+    // Tables merged into one party wear the same ring; all but the primary also name it.
+    final merged = table.session?.isMerged ?? false;
+    final primary = merged ? table.session!.tables.first : null;
     final description = [
       table.label,
       if (disabled) t('tables.outOfService') else t(tableStatusKey(table.foodStatus)),
       if (table.isHeldByMe) t('tables.heldByMe'),
       if (table.isHeldByOther) '${t('tables.heldBy')} ${table.claim!.holder.staffName}',
       if (pendingPayment) t('tables.pendingPayment'),
+      if (merged)
+        '${t('tables.mergedWith')} ${[
+          for (final other in table.session!.tables)
+            if (other.floorItemId != floorItemId) other.label,
+        ].join(', ')}',
     ].join(', ');
 
     final shape = RoundedRectangleBorder(
@@ -104,6 +112,34 @@ class TableTile extends ConsumerWidget {
                   ),
                 ),
               ),
+              if (primary != null)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  // Stops short of the icons on the right.
+                  right: 44,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.link_rounded, size: 16, color: MeedColors.inkSoft),
+                      if (primary.floorItemId != floorItemId) ...[
+                        const SizedBox(width: 2),
+                        Flexible(
+                          child: Text(
+                            primary.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              height: 1.2,
+                              fontWeight: FontWeight.w700,
+                              color: MeedColors.inkSoft,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               Positioned(
                 top: 8,
                 right: 8,

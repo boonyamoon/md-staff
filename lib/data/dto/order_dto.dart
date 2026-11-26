@@ -138,6 +138,8 @@ class TableSessionDetail {
     required this.openedAt,
     this.guestCount = 1,
     this.currentRound = 0,
+    this.primaryFloorItemId,
+    this.tables = const <TableRef>[],
   });
 
   final String sessionId;
@@ -145,6 +147,10 @@ class TableSessionDetail {
   final String openedAt;
   final int guestCount;
   final int currentRound;
+  final String? primaryFloorItemId;
+
+  /// Every table the party sits at, the primary first. Empty from a server that does not say.
+  final List<TableRef> tables;
 
   bool get isPendingPayment => status == 'PENDING_PAYMENT';
 
@@ -154,6 +160,8 @@ class TableSessionDetail {
         openedAt: asString(json['opened_at']),
         guestCount: asInt(json['guest_count'], fallback: 1),
         currentRound: asInt(json['current_round']),
+        primaryFloorItemId: asStringOrNull(json['primary_floor_item_id']),
+        tables: asList(json['tables'], TableRef.fromJson),
       );
 }
 

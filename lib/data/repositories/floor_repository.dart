@@ -2,6 +2,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/network/api_client.dart';
 import '../dto/floor_dto.dart';
+import '../dto/json.dart';
 import '../dto/order_dto.dart';
 
 /// Zones, tables, and the claim that makes a table one handset's at a time.
@@ -78,6 +79,107 @@ class FloorRepository {
     );
     return PlacedRound.fromJson(envelopeData(body));
   }
+
+  // ── The table menu. Each acts under the table's claim lease; [sessionId] is the party the waiter
+  // was looking at, so an action meant for one party never lands on the next. ──
+
+  /// Seats [guestCount] at a free table without ordering yet. Answers with the session's id.
+  Future<String> openTable(
+    String floorItemId, {
+    required String leaseToken,
+    required String idempotencyKey,
+    required int guestCount,
+  }) async {
+    final body = await _api.post(
+      'api/v1/staff-app/tables/$floorItemId/open',
+      headers: _leased(leaseToken, idempotencyKey),
+      body: {'guest_count': guestCount},
+    );
+    return asString(envelopeData(body)['session_id']);
+  }
+
+  Future<void> setGuestCount(
+    String floorItemId, {
+    required String leaseToken,
+    required String sessionId,
+    required int guestCount,
+  }) async {
+    await _api.patch(
+      'api/v1/staff-app/tables/$floorItemId/guests',
+      headers: _leased(leaseToken),
+      body: {'session_id': sessionId, 'guest_count': guestCount},
+    );
+  }
+
+  /// The link a guest scans to order for this table.
+  Future<TableQr> tableQr(String floorItemId, {required String leaseToken}) async {
+    final body = await _api.post(
+      'api/v1/staff-app/tables/$floorItemId/qr',
+      headers: _leased(leaseToken),
+    );
+    return TableQr.fromJson(envelopeData(body));
+  }
+
+  /// Releases a table nobody has ordered at.
+  Future<void> cancelTable(
+    String floorItemId, {
+    required String leaseToken,
+    required String idempotencyKey,
+    required String sessionId,
+  }) async {
+    await _api.post(
+      'api/v1/staff-app/tables/$floorItemId/cancel',
+      headers: _leased(leaseToken, idempotencyKey),
+      body: {'session_id': sessionId},
+    );
+  }
+
+  Future<void> transferTable(
+    String floorItemId, {
+    required String leaseToken,
+    required String idempotencyKey,
+    required String sessionId,
+    required String destinationId,
+  }) async {
+    await _api.post(
+      'api/v1/staff-app/tables/$floorItemId/transfer',
+      headers: _leased(leaseToken, idempotencyKey),
+      body: {'session_id': sessionId, 'destination_floor_item_id': destinationId},
+    );
+  }
+
+  /// Adds the free table [otherId] to the party at [floorItemId].
+  Future<void> mergeTable(
+    String floorItemId, {
+    required String leaseToken,
+    required String idempotencyKey,
+    required String sessionId,
+    required String otherId,
+  }) async {
+    await _api.post(
+      'api/v1/staff-app/tables/$floorItemId/merge',
+      headers: _leased(leaseToken, idempotencyKey),
+      body: {'session_id': sessionId, 'floor_item_id': otherId},
+    );
+  }
+
+  /// Takes [otherId] out of the party at [floorItemId].
+  Future<void> unmergeTable(
+    String floorItemId, {
+    required String leaseToken,
+    required String idempotencyKey,
+    required String sessionId,
+    required String otherId,
+  }) async {
+    await _api.post(
+      'api/v1/staff-app/tables/$floorItemId/unmerge',
+      headers: _leased(leaseToken, idempotencyKey),
+      body: {'session_id': sessionId, 'floor_item_id': otherId},
+    );
+  }
+
+  static Map<String, String> _leased(String leaseToken, [String? idempotencyKey]) =>
+      {'X-Claim-Lease': leaseToken, 'Idempotency-Key': ?idempotencyKey};
 
   String newIdempotencyKey() => _uuid.v4();
 }

@@ -22,7 +22,8 @@ class AppRoutes {
 
   static String menu(String floorItemId) => '/table/$floorItemId';
   static String cart(String floorItemId) => '/table/$floorItemId/cart';
-  static String bill(String floorItemId) => '/table/$floorItemId/bill';
+  /// Not under the table's menu: the bill can be read without taking the table.
+  static String bill(String floorItemId) => '/bill/$floorItemId';
 
   static void goZones(BuildContext context) => context.go(zones);
   static void goMenu(BuildContext context, String floorItemId) => context.push(menu(floorItemId));
@@ -70,12 +71,12 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) =>
                 CartScreen(floorItemId: state.pathParameters['floorItemId'] ?? ''),
           ),
-          GoRoute(
-            path: 'bill',
-            builder: (context, state) =>
-                TableBillScreen(floorItemId: state.pathParameters['floorItemId'] ?? ''),
-          ),
         ],
+      ),
+      GoRoute(
+        path: '/bill/:floorItemId',
+        builder: (context, state) =>
+            TableBillScreen(floorItemId: state.pathParameters['floorItemId'] ?? ''),
       ),
       GoRoute(path: AppRoutes.settings, builder: (context, state) => const SettingsScreen()),
     ],

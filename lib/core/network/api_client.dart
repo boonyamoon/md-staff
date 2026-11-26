@@ -218,6 +218,17 @@ class ApiClient {
             options: _options(staffBearer: staffBearer, headers: headers),
           ));
 
+  Future<Map<String, dynamic>> patch(
+    String path, {
+    Object? body,
+    Map<String, String>? headers,
+  }) =>
+      _send(() => _dio.patch<dynamic>(
+            path,
+            data: body,
+            options: _options(headers: headers),
+          ));
+
   Options _options({String? staffBearer, Map<String, String>? headers}) {
     final merged = <String, dynamic>{...?headers};
     if (staffBearer != null && staffBearer.isNotEmpty) {

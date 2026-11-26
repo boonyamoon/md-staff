@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'json.dart';
 
 /// Who is holding a table.
@@ -126,6 +128,29 @@ enum TableFoodStatus {
   served,
 }
 
+/// One table of the party sitting at it.
+@immutable
+class TableRef {
+  const TableRef({required this.floorItemId, required this.label});
+
+  final String floorItemId;
+  final String label;
+
+  factory TableRef.fromJson(Map<String, dynamic> json) => TableRef(
+        floorItemId: asString(json['floor_item_id']),
+        label: asString(json['label']),
+      );
+
+  Map<String, dynamic> toCacheJson() => {'floor_item_id': floorItemId, 'label': label};
+
+  @override
+  bool operator ==(Object other) =>
+      other is TableRef && other.floorItemId == floorItemId && other.label == label;
+
+  @override
+  int get hashCode => Object.hash(floorItemId, label);
+}
+
 class TableSessionSummary {
   const TableSessionSummary({
     required this.sessionId,
@@ -137,6 +162,8 @@ class TableSessionSummary {
     this.itemCount = 0,
     this.totalAmount = 0,
     this.serverFoodStatus,
+    this.primaryFloorItemId,
+    this.tables = const <TableRef>[],
   });
 
   final String sessionId;
@@ -150,6 +177,14 @@ class TableSessionSummary {
 
   /// `food_status` as the server sent it: `NOT_ORDERED`, `WAITING` or `SERVED`.
   final String? serverFoodStatus;
+
+  final String? primaryFloorItemId;
+
+  /// Every table the party sits at, the primary first. More than one means they are merged. Empty
+  /// from a server that does not say.
+  final List<TableRef> tables;
+
+  bool get isMerged => tables.length > 1;
 
   /// The cashier has this table's bill open at the POS; a waiter cannot add to it right now.
   bool get isPendingPayment => status == 'PENDING_PAYMENT';
@@ -173,6 +208,8 @@ class TableSessionSummary {
         itemCount: asInt(json['item_count']),
         totalAmount: asNum(json['total_amount']),
         serverFoodStatus: asStringOrNull(json['food_status']),
+        primaryFloorItemId: asStringOrNull(json['primary_floor_item_id']),
+        tables: asList(json['tables'], TableRef.fromJson),
       );
 
   Map<String, dynamic> toCacheJson() => {
@@ -185,6 +222,8 @@ class TableSessionSummary {
         'item_count': itemCount,
         'total_amount': totalAmount,
         'food_status': serverFoodStatus,
+        'primary_floor_item_id': primaryFloorItemId,
+        'tables': [for (final table in tables) table.toCacheJson()],
       };
 
   @override
@@ -198,11 +237,13 @@ class TableSessionSummary {
       other.orderId == orderId &&
       other.itemCount == itemCount &&
       other.totalAmount == totalAmount &&
-      other.serverFoodStatus == serverFoodStatus;
+      other.serverFoodStatus == serverFoodStatus &&
+      other.primaryFloorItemId == primaryFloorItemId &&
+      listEquals(other.tables, tables);
 
   @override
   int get hashCode => Object.hash(sessionId, status, openedAt, guestCount, currentRound, orderId,
-      itemCount, totalAmount, serverFoodStatus);
+      itemCount, totalAmount, serverFoodStatus, primaryFloorItemId, Object.hashAll(tables));
 }
 
 class FloorTable {
@@ -334,6 +375,19 @@ class FloorZone {
         tableCount: asInt(json['table_count']),
         occupiedCount: asInt(json['occupied_count']),
         tables: asList(json['tables'], FloorTable.fromJson),
+      );
+}
+
+/// `POST /api/v1/staff-app/tables/:id/qr`
+class TableQr {
+  const TableQr({required this.url, this.expiresAt});
+
+  final String url;
+  final DateTime? expiresAt;
+
+  factory TableQr.fromJson(Map<String, dynamic> json) => TableQr(
+        url: asString(json['url']),
+        expiresAt: DateTime.tryParse(asString(json['expires_at']))?.toLocal(),
       );
 }
 

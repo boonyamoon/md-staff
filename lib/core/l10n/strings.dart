@@ -55,9 +55,53 @@ class AppStrings {
     if (failure.isOffline) return call('error.offline');
     if (failure.endsSession) return call('error.sessionEnded');
     if (failure.isMissingRoute) return call('error.serviceUnavailable');
+    final known = _failureKeys[failure.code];
+    if (known != null) return call(known);
     if (failure.code == 'RATE_LIMIT_EXCEEDED') return call('error.rateLimited');
     if (failure.code == 'SERVER_ERROR') return call('error.server');
     return failure.message;
+  }
+
+  /// Refusals the table menu can meet, phrased here rather than in the server's English.
+  static const Map<String, String> _failureKeys = {
+    'TABLE_HAS_ORDER': 'error.tableHasOrder',
+    'TABLE_SESSION_CHANGED': 'error.tableChanged',
+    'TABLE_NOT_OPEN': 'error.tableChanged',
+    'TABLE_NOT_MERGED': 'error.tableChanged',
+    'TABLE_NOT_AVAILABLE': 'error.tableChanged',
+    'SESSION_NOT_ACTIVE': 'error.tableChanged',
+    'CANNOT_UNMERGE_LAST_TABLE': 'error.tableChanged',
+    'CANNOT_UNMERGE_PRIMARY_TABLE': 'error.unmergePrimary',
+    'DESTINATION_TABLE_NOT_AVAILABLE': 'error.destinationBusy',
+    'TABLE_ALREADY_MAPPED': 'error.destinationBusy',
+    'DESTINATION_TABLE_CLAIMED': 'error.destinationClaimed',
+    'SESSION_PENDING_PAYMENT': 'error.pendingPayment',
+    'CONCURRENT_MODIFICATION': 'error.concurrent',
+  };
+
+  /// [call], with `{0}`, `{1}`… replaced by [values].
+  String format(String key, List<Object> values) {
+    var text = call(key);
+    for (var i = 0; i < values.length; i++) {
+      text = text.replaceAll('{$i}', '${values[i]}');
+    }
+    return text;
+  }
+
+  /// When a table was opened and how long ago: `Today 12:00 (5 min)`.
+  String since(DateTime openedAt, {required DateTime now}) {
+    final elapsed = now.difference(openedAt);
+    final minutes = elapsed.isNegative ? 0 : elapsed.inMinutes;
+    final duration = switch (minutes) {
+      < 60 => '$minutes ${call('sheet.minutes')}',
+      < 24 * 60 => '${minutes ~/ 60} ${call('sheet.hours')}'
+          '${minutes % 60 == 0 ? '' : ' ${minutes % 60} ${call('sheet.minutes')}'}',
+      _ => '${elapsed.inDays} ${call('sheet.days')}',
+    };
+    final at = time(openedAt, now: now);
+    // [time] puts the date in front itself on any other day.
+    final day = at.contains('/') ? at : '${call('sheet.today')} $at';
+    return '$day ($duration)';
   }
 
   /// A time of day as `14:32`, with the date in front when it was not today.
@@ -163,6 +207,12 @@ class AppStrings {
     'cart.clear': 'ล้างตะกร้า',
     'cart.clearConfirm': 'ล้างรายการทั้งหมดในตะกร้า',
     'cart.guests': 'จำนวนลูกค้า',
+    'kitchen.pending': 'รอส่งเข้าครัว',
+    'kitchen.sent': 'ส่งเข้าครัวแล้ว',
+    'kitchen.preparing': 'กำลังทำ',
+    'kitchen.ready': 'พร้อมเสิร์ฟ',
+    'kitchen.served': 'เสิร์ฟแล้ว',
+    'kitchen.cancelled': 'ยกเลิก',
     'bill.title': 'รายการที่สั่งแล้ว',
     'bill.empty': 'โต๊ะนี้ยังไม่มีรายการ',
     'bill.round': 'รอบที่',
@@ -193,6 +243,50 @@ class AppStrings {
     'settings.menuData': 'ข้อมูลเมนู',
     'settings.updatedAt': 'อัปเดตล่าสุด',
     'settings.neverUpdated': 'ยังไม่เคยอัปเดต',
+    'sheet.today': 'วันนี้',
+    'sheet.minutes': 'นาที',
+    'sheet.hours': 'ชม.',
+    'sheet.days': 'วัน',
+    'sheet.notOpened': 'ยังไม่ได้เปิดโต๊ะ',
+    'sheet.notOrdered': 'ยังไม่ได้สั่งอาหาร',
+    'sheet.order': 'สั่งอาหาร',
+    'sheet.orderMore': 'สั่งเพิ่ม',
+    'sheet.bill': 'บิล',
+    'sheet.people': 'คน',
+    'sheet.guests': 'จำนวนคน',
+    'sheet.qr': 'Mobile Order',
+    'sheet.cancel': 'ยกเลิกโต๊ะ',
+    'sheet.transfer': 'เปลี่ยนโต๊ะ',
+    'sheet.merge': 'รวมโต๊ะ',
+    'sheet.unmerge': 'แยกโต๊ะ',
+    'sheet.heldNote': '{0} กำลังสั่งอยู่ · การแก้ไขต้องใช้ PIN ผู้จัดการ',
+    'sheet.why.offline': 'ต้องออนไลน์จึงจะทำรายการได้',
+    'sheet.why.free': 'โต๊ะนี้ยังไม่ได้เปิด',
+    'sheet.why.hasOrder': 'โต๊ะมีรายการแล้ว ยกเลิกบิลได้ที่ POS',
+    'sheet.cancelTitle': 'ยกเลิกโต๊ะ {0}?',
+    'sheet.cancelBody': 'โต๊ะนี้ยังไม่ได้สั่งอาหาร ยกเลิกแล้วโต๊ะจะกลับเป็นว่าง',
+    'sheet.cancelled': 'ยกเลิกโต๊ะ {0} แล้ว',
+    'sheet.openTitle': 'เปิดโต๊ะ {0}',
+    'sheet.openAndQr': 'เปิดโต๊ะและสร้าง QR',
+    'sheet.guestsSaved': 'บันทึกจำนวนคนแล้ว',
+    'sheet.transferPick': 'ย้ายโต๊ะ {0} ไปที่',
+    'sheet.mergePick': 'เลือกโต๊ะว่างมารวมกับ {0}',
+    'sheet.unmergePick': 'เลือกโต๊ะที่จะแยกออก',
+    'sheet.noFreeTable': 'ไม่มีโต๊ะว่าง',
+    'sheet.transferConfirm': 'ย้ายจากโต๊ะ {0} ไปโต๊ะ {1}?',
+    'sheet.mergeConfirm': 'รวมโต๊ะ {1} เข้ากับโต๊ะ {0}?',
+    'sheet.unmergeConfirm': 'แยกโต๊ะ {0} ออกจากกลุ่ม?',
+    'sheet.transferred': 'ย้ายไปโต๊ะ {0} แล้ว',
+    'sheet.merged': 'รวมโต๊ะ {0} แล้ว',
+    'sheet.unmerged': 'แยกโต๊ะ {0} แล้ว',
+    'qr.scan': 'ให้ลูกค้าสแกนเพื่อสั่งอาหาร',
+    'qr.validUntil': 'ใช้ได้ถึง',
+    'tables.mergedWith': 'รวมกับโต๊ะ',
+    'error.tableHasOrder': 'โต๊ะมีรายการแล้ว ยกเลิกบิลได้ที่ POS',
+    'error.tableChanged': 'โต๊ะนี้เปลี่ยนไปแล้ว กรุณาตรวจสอบอีกครั้ง',
+    'error.destinationBusy': 'โต๊ะปลายทางไม่ว่างแล้ว กรุณาเลือกโต๊ะอื่น',
+    'error.destinationClaimed': 'มีเครื่องอื่นกำลังใช้โต๊ะปลายทาง',
+    'error.unmergePrimary': 'แยกโต๊ะหลักไม่ได้ ให้เปลี่ยนโต๊ะก่อน',
     'error.sessionEnded': 'เครื่องนี้ถูกออกจากระบบ กรุณาเข้าสู่ระบบใหม่',
     'error.pendingPayment': 'โต๊ะนี้กำลังชำระเงินที่ POS ยังเพิ่มรายการไม่ได้',
     'error.outOfStock': 'สินค้าบางรายการมีไม่พอ',
@@ -281,6 +375,12 @@ class AppStrings {
     'cart.clear': 'Clear cart',
     'cart.clearConfirm': 'Remove everything from the cart',
     'cart.guests': 'Guests',
+    'kitchen.pending': 'Not sent yet',
+    'kitchen.sent': 'Sent to kitchen',
+    'kitchen.preparing': 'Preparing',
+    'kitchen.ready': 'Ready',
+    'kitchen.served': 'Served',
+    'kitchen.cancelled': 'Cancelled',
     'bill.title': 'Already ordered',
     'bill.empty': 'Nothing ordered at this table yet',
     'bill.round': 'Round',
@@ -312,6 +412,50 @@ class AppStrings {
     'settings.menuData': 'Menu data',
     'settings.updatedAt': 'Last updated',
     'settings.neverUpdated': 'Not updated yet',
+    'sheet.today': 'Today',
+    'sheet.minutes': 'min',
+    'sheet.hours': 'h',
+    'sheet.days': 'days',
+    'sheet.notOpened': 'Not opened yet',
+    'sheet.notOrdered': 'Nothing ordered yet',
+    'sheet.order': 'Order',
+    'sheet.orderMore': 'Order more',
+    'sheet.bill': 'Bill',
+    'sheet.people': 'guests',
+    'sheet.guests': 'Guests',
+    'sheet.qr': 'Mobile Order',
+    'sheet.cancel': 'Cancel table',
+    'sheet.transfer': 'Move table',
+    'sheet.merge': 'Merge tables',
+    'sheet.unmerge': 'Split table',
+    'sheet.heldNote': '{0} is ordering · changes need a manager PIN',
+    'sheet.why.offline': 'You need to be online to do that',
+    'sheet.why.free': 'This table has not been opened',
+    'sheet.why.hasOrder': 'This table has an order — cancel its bill at the POS',
+    'sheet.cancelTitle': 'Cancel table {0}?',
+    'sheet.cancelBody': 'Nothing has been ordered. The table will be free again.',
+    'sheet.cancelled': 'Table {0} cancelled',
+    'sheet.openTitle': 'Open table {0}',
+    'sheet.openAndQr': 'Open the table and show the QR',
+    'sheet.guestsSaved': 'Guest count saved',
+    'sheet.transferPick': 'Move table {0} to',
+    'sheet.mergePick': 'Pick a free table to merge with {0}',
+    'sheet.unmergePick': 'Pick the table to split off',
+    'sheet.noFreeTable': 'No free tables',
+    'sheet.transferConfirm': 'Move from table {0} to table {1}?',
+    'sheet.mergeConfirm': 'Merge table {1} into table {0}?',
+    'sheet.unmergeConfirm': 'Split table {0} off the group?',
+    'sheet.transferred': 'Moved to table {0}',
+    'sheet.merged': 'Table {0} merged',
+    'sheet.unmerged': 'Table {0} split off',
+    'qr.scan': 'Guests scan this to order',
+    'qr.validUntil': 'Valid until',
+    'tables.mergedWith': 'Merged with table',
+    'error.tableHasOrder': 'This table has an order — cancel its bill at the POS',
+    'error.tableChanged': 'This table has changed. Please check it again.',
+    'error.destinationBusy': 'That table is no longer free. Pick another one.',
+    'error.destinationClaimed': 'Another handset is using that table',
+    'error.unmergePrimary': 'The primary table cannot be split off — move the party first',
     'error.sessionEnded': 'This handset was signed out. Please sign in again.',
     'error.pendingPayment': 'This table is being paid for at the POS — items cannot be added',
     'error.outOfStock': 'Some items do not have enough stock',

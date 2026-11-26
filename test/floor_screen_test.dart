@@ -9,6 +9,7 @@ import 'package:md_staff/data/dto/order_dto.dart';
 import 'package:md_staff/data/local/floor_store.dart';
 import 'package:md_staff/data/repositories/menu_repository.dart';
 import 'package:md_staff/features/bootstrap/session_controller.dart';
+import 'package:md_staff/features/tables/table_action_sheet.dart';
 import 'package:md_staff/features/zones/floor_screen.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -137,39 +138,52 @@ void main() {
     expect(find.byIcon(Icons.lock_rounded), findsNothing);
   });
 
-  testWidgets('offline, tapping a table says a connection is needed', (tester) async {
+  testWidgets('tapping a table brings up its menu without claiming it', (tester) async {
     when(floor.zones).thenAnswer((_) async => _floor);
-    when(() => floor.table('A4')).thenThrow(
-      const ApiFailure(code: 'NETWORK_UNREACHABLE', message: 'no connection'),
+    when(() => floor.table('A4')).thenAnswer(
+      (_) async => const TableDetail(
+        floorItemId: 'A4',
+        label: 'A4',
+        zoneId: 'z1',
+        zoneName: '1st Floor',
+      ),
     );
     await pumpFloor(tester);
 
     await tester.tap(find.text('A4'));
     await tester.pumpAndSettle();
 
-    expect(find.text('ต้องออนไลน์จึงจะเปิดโต๊ะได้'), findsOneWidget);
+    expect(find.byType(TableActionSheet), findsOneWidget);
+    expect(find.text('ยังไม่ได้เปิดโต๊ะ'), findsOneWidget);
+    verify(() => floor.table('A4')).called(1);
+    verifyNever(() => floor.claim(any()));
   });
 
-  testWidgets('tapping a held table names the holder and fetches the floor again', (tester) async {
-    when(floor.zones).thenAnswer((_) async => _floor);
-    final held = FloorTable.fromJson(tableJson('A5', heldByMe: false));
-    when(() => floor.table('A5')).thenAnswer(
-      (_) async => TableDetail(
-        floorItemId: 'A5',
-        label: 'A5',
-        zoneId: 'z1',
-        zoneName: '1st Floor',
-        claim: held.claim,
-      ),
+  testWidgets('marks the tables of a merged party, naming the primary on the others',
+      (tester) async {
+    const group = [
+      {'floor_item_id': 'M1', 'label': 'M1'},
+      {'floor_item_id': 'M2', 'label': 'M2'},
+    ];
+    Map<String, dynamic> member(String id) {
+      final table = tableJson(id, foodStatus: 'WAITING');
+      (table['session'] as Map<String, dynamic>)
+        ..['tables'] = group
+        ..['primary_floor_item_id'] = 'M1';
+      return table;
+    }
+
+    when(floor.zones).thenAnswer(
+      (_) async => [
+        _zone('z1', 'Zone', [member('M1'), member('M2'), tableJson('M3')]),
+      ],
     );
     await pumpFloor(tester);
 
-    await tester.tap(find.text('A5'));
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('Dao'), findsWidgets);
-    verifyNever(() => floor.claim(any()));
-    verify(floor.zones).called(2);
+    expect(find.byIcon(Icons.link_rounded), findsNWidgets(2));
+    // The primary's own name, and again on the table merged into it.
+    expect(find.text('M1'), findsNWidgets(2));
+    expect(find.text('M2'), findsOneWidget);
   });
 
   testWidgets('with nothing stored and no server, offers a retry', (tester) async {

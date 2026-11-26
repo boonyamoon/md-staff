@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,12 +11,12 @@ import '../../router/app_router.dart';
 import '../bootstrap/session_controller.dart';
 import '../menu/menu_catalog_controller.dart';
 import '../tables/active_table_controller.dart';
+import '../tables/table_action_sheet.dart';
 import '../tables/table_tile.dart';
-import '../tables/take_over_sheet.dart';
 import 'zones_controller.dart';
 
-/// The first screen of a shift: a tab per zone, its tables three across. Tapping a table claims it
-/// and goes to the menu; one another handset holds offers the manager-PIN takeover instead.
+/// The first screen of a shift: a tab per zone, its tables three across. Tapping a table brings up
+/// its menu — order, bill, guests, QR, cancel, move and merge.
 class FloorScreen extends ConsumerStatefulWidget {
   const FloorScreen({super.key});
 
@@ -38,56 +36,28 @@ class _FloorScreenState extends ConsumerState<FloorScreen> {
   }
 
   Future<void> _openTable(String floorItemId) async {
-    // A second tap while the first is still claiming would open the table twice.
+    // A second tap before the menu is up would stack a second one.
     if (_opening) return;
     _opening = true;
     try {
-      await _open(floorItemId);
+      final result = await showTableSheet(context, floorItemId: floorItemId);
+      if (!mounted || result == null) return;
+      final message = result.message;
+      if (message != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      }
+      switch (result.next) {
+        case TableSheetNext.order:
+          AppRoutes.goMenu(context, floorItemId);
+        case TableSheetNext.bill:
+          AppRoutes.goBill(context, floorItemId);
+        case TableSheetNext.stay:
+          break;
+      }
     } finally {
       _opening = false;
     }
   }
-
-  Future<void> _open(String floorItemId) async {
-    final table = ref.read(zonesProvider).value?.table(floorItemId);
-    if (table == null) return;
-    final controller = ref.read(activeTableProvider.notifier);
-    final floor = ref.read(zonesProvider.notifier);
-
-    final opened = await controller.open(floorItemId);
-    if (!mounted) return;
-    if (opened) {
-      AppRoutes.goMenu(context, floorItemId);
-      return;
-    }
-
-    final t = ref.read(stringsProvider);
-    final state = ref.read(activeTableProvider);
-    final failure = state.failure;
-
-    // Another handset has it: the only way in is a manager PIN. The floor on screen may have been
-    // behind, so it is fetched again.
-    if (failure?.code == 'TABLE_CLAIM_HELD') {
-      unawaited(floor.refresh());
-      final taken = await showTakeOverSheet(context, table: table, failure: failure);
-      if (taken == true && mounted) AppRoutes.goMenu(context, floorItemId);
-      controller.acknowledgeFailure();
-      return;
-    }
-    if (state.exitReason == TableExitReason.pendingPayment) {
-      unawaited(floor.refresh());
-      _toast(t('error.pendingPayment'));
-      controller.acknowledgeExit();
-      return;
-    }
-    if (failure != null) {
-      _toast(failure.isOffline ? t('error.needOnline') : t.failure(failure));
-      controller.acknowledgeFailure();
-    }
-  }
-
-  void _toast(String message) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 
   @override
   Widget build(BuildContext context) {
