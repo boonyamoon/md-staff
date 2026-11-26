@@ -31,7 +31,7 @@
 | Flutter | 3.38.x (Dart 3.10) |
 | Android SDK | Platform 34 ขึ้นไป (`flutter doctor` จะบอกถ้ายังขาด) |
 | Xcode | 15 ขึ้นไป สำหรับ build iOS |
-| เครื่องที่รันแอป | iOS 13+ หรือ Android 7.0 (API 24) ขึ้นไป |
+| เครื่องที่รันแอป | iPhone ที่ใช้ iOS 15+ หรือ Android 7.0 (API 24) ขึ้นไป |
 | สิทธิ์พนักงาน | `user_staff.allow_staff_login = true` (ค่า default เป็น `false`) หรือเป็น super admin |
 
 โปรเจกต์นี้ **ไม่ใช้ build_runner หรือ codegen** โคลนแล้ว `flutter pub get` แล้วรันได้เลย
