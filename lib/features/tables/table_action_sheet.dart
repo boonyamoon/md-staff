@@ -185,9 +185,24 @@ class _TableActionSheetState extends ConsumerState<TableActionSheet> {
 
   // ── The buttons ──
 
-  Future<TableSheetResult?> _order() async {
-    final lease = await _claim();
-    return lease == null ? null : const TableSheetResult(next: TableSheetNext.order);
+  Future<TableSheetResult?> _order(TableSheetView view) async {
+    // Asked on the way in, with the guests in front of the waiter: left to the cart screen alone,
+    // the count is easily sent as 1. The first round saves it, which is what opens the table.
+    int? guests;
+    if (!view.isOpen) {
+      guests = await showGuestCountDialog(
+        context,
+        title: _t.format('sheet.guestsFor', [view.label]),
+        initial: 1,
+      );
+      if (guests == null || !mounted) return null;
+    }
+    if (await _claim() == null) return null;
+    // Unless the table was seated meanwhile: that party's own count stands.
+    if (guests != null && _providers.read(activeTableProvider).detail?.session == null) {
+      _providers.read(activeTableProvider.notifier).setGuestCount(guests);
+    }
+    return const TableSheetResult(next: TableSheetNext.order);
   }
 
   Future<void> _open(FloorRepository tables, String lease, int guests) => _once(
@@ -361,7 +376,7 @@ class _TableActionSheetState extends ConsumerState<TableActionSheet> {
       return;
     }
     unawaited(_run(() async => switch (action) {
-          TableMenuAction.order => await _order(),
+          TableMenuAction.order => await _order(view),
           TableMenuAction.bill => const TableSheetResult(next: TableSheetNext.bill),
           TableMenuAction.guests => await _guests(view),
           TableMenuAction.qr => await _qr(view),

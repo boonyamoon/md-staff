@@ -7,6 +7,7 @@ import 'package:md_staff/core/theme/app_theme.dart';
 import 'package:md_staff/data/dto/floor_dto.dart';
 import 'package:md_staff/data/dto/order_dto.dart';
 import 'package:md_staff/features/bootstrap/session_controller.dart';
+import 'package:md_staff/features/tables/active_table_controller.dart';
 import 'package:md_staff/features/tables/table_action_sheet.dart';
 import 'package:md_staff/features/tables/table_tile.dart';
 import 'package:mocktail/mocktail.dart';
@@ -166,6 +167,54 @@ void main() {
     expect(result!.next, TableSheetNext.order);
     verify(() => floor.claim('A1')).called(1);
     verifyNever(() => floor.releaseClaim(any(), any()));
+  });
+
+  int guestsOnTheCart(WidgetTester tester) => ProviderScope.containerOf(
+        tester.element(find.text('open')),
+      ).read(activeTableProvider).guestCount;
+
+  testWidgets('ordering at a free table asks how many guests first', (tester) async {
+    when(() => floor.table('FREE')).thenAnswer((_) async => _detail(id: 'FREE', kitchen: null));
+    await open(tester, table: 'FREE');
+
+    await press(tester, 'สั่งอาหาร');
+    expect(find.text('จำนวนลูกค้าโต๊ะ FREE'), findsOneWidget);
+    // Backing out takes nothing.
+    await press(tester, 'ยกเลิก');
+    verifyNever(() => floor.claim(any()));
+    expect(closed, isFalse);
+
+    await press(tester, 'สั่งอาหาร');
+    await tester.tap(find.byIcon(Icons.add_rounded));
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.add_rounded));
+    await press(tester, 'ยืนยัน');
+
+    expect(result!.next, TableSheetNext.order);
+    verify(() => floor.claim('FREE')).called(1);
+    // Goes with the first round; nothing is opened until then.
+    expect(guestsOnTheCart(tester), 3);
+    verifyNever(() => floor.openTable(any(),
+        leaseToken: any(named: 'leaseToken'),
+        idempotencyKey: any(named: 'idempotencyKey'),
+        guestCount: any(named: 'guestCount')));
+  });
+
+  testWidgets('a table seated meanwhile keeps its own guest count', (tester) async {
+    var reads = 0;
+    // Free when the menu opened; seated by the time it is claimed.
+    when(() => floor.table('FREE')).thenAnswer(
+      (_) async => ++reads == 1
+          ? _detail(id: 'FREE', kitchen: null)
+          : _detail(id: 'FREE', guests: 5),
+    );
+    await open(tester, table: 'FREE');
+
+    await press(tester, 'สั่งอาหาร');
+    await press(tester, 'ยืนยัน');
+
+    expect(result!.next, TableSheetNext.order);
+    expect(guestsOnTheCart(tester), 5);
   });
 
   testWidgets('the bill is opened without claiming', (tester) async {
