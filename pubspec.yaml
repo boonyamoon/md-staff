@@ -50,6 +50,14 @@ dependencies:
   flutter_cache_manager: ^3.5.0
   qr_flutter: ^4.1.0
 
+# path_provider_foundation 2.6.0 reaches iOS through the `objective_c` native library. Flutter 3.41
+# keeps one built copy of it for the simulator and for devices, and does not rebuild it when the
+# target changes (flutter/flutter#185667). After an archive the simulator was handed the device's
+# copy, which cannot load: no menu photos and no offline copies. 2.5.1 is an ordinary plugin and has
+# no such library. Remove this once the Flutter in use has the fix.
+dependency_overrides:
+  path_provider_foundation: 2.5.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
