@@ -76,7 +76,57 @@ flutter build apk --release --dart-define=API_BASE_URL=https://api.meedeepos.com
 flutter build ipa --release --dart-define=API_BASE_URL=https://api.meedeepos.com/
 ```
 
-ยังไม่ได้ตั้งค่า signing (keystore / provisioning profile) — ต้องทำก่อนปล่อยจริง
+ก่อน build ต้องตั้งค่า signing ตามหัวข้อถัดไป และเลขหลัง `+` ของ `version` ใน `pubspec.yaml`
+ต้องเพิ่มทุกครั้งที่อัปขึ้นสโตร์
+
+## Signing
+
+### Android
+
+ตัว release sign ด้วย **upload key** ที่ระบุใน `android/key.properties` ตั้งค่าครั้งเดียวต่อเครื่องที่ใช้ build
+
+1. สร้าง keystore (ครั้งแรกครั้งเดียวของทั้งทีม เครื่องอื่นให้ใช้ไฟล์เดิม)
+
+   ```sh
+   mkdir -p ~/keys
+   keytool -genkey -v -keystore ~/keys/md-staff-upload.jks \
+     -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+   ```
+
+2. สร้างไฟล์ `android/key.properties`
+
+   ```properties
+   storePassword=<รหัสผ่านของ keystore>
+   keyPassword=<รหัสผ่านเดียวกัน>
+   keyAlias=upload
+   storeFile=/Users/<ชื่อผู้ใช้>/keys/md-staff-upload.jks
+   ```
+
+   `storeFile` ต้องเป็น path เต็ม เพราะ Gradle ไม่แปลง `~` ให้
+
+3. build แล้วตรวจว่าใช้ key ถูกตัว
+
+   ```sh
+   flutter build appbundle --release --dart-define=API_BASE_URL=https://api.meedeepos.com/
+   keytool -printcert -jarfile build/app/outputs/bundle/release/app-release.aab
+   ```
+
+   ช่อง `Owner` ต้องเป็นชื่อที่กรอกตอนสร้าง keystore ถ้าเป็น `CN=Android Debug` แปลว่าไม่พบ
+   `key.properties`
+
+ข้อควรรู้
+
+- `key.properties` และไฟล์ `.jks` ถูกกันไว้ใน `android/.gitignore` **ห้าม commit** และให้สำรอง
+  keystore กับรหัสผ่านไว้นอกเครื่อง เช่น ใน password manager
+- ถ้าไม่มี `key.properties` ตัว release จะ sign ด้วย debug key รันทดสอบได้ แต่ Google Play ไม่รับ
+- บน Google Play ใช้ **Play App Signing**: Google เก็บ key ของแอปจริง key นี้ใช้แค่ตอนอัป
+  ถ้าหายขอรีเซ็ตใน Play Console ได้
+- ถ้าแจก APK ให้ติดตั้งเองโดยไม่ผ่าน Play key นี้คือ key ของแอปจริง **ถ้าหายจะอัปเดตแอปเดิมไม่ได้**
+- เครื่องที่ติดตั้งตัว debug ไว้ ต้องลบแอปก่อนติดตั้งตัว release
+
+### iOS
+
+ตั้งค่าใน Xcode: เลือก team และ provisioning profile ของ `com.meedee.staff` แล้ว Archive
 
 ## เริ่มใช้งานเครื่องใหม่
 
