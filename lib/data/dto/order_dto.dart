@@ -56,9 +56,10 @@ class OrderLine {
   final bool isCancelled;
   final List<OrderLineOption> options;
 
-  String get optionsLabel => options
-      .map((o) => o.quantity > 1 ? 'x${o.quantity} ${o.optionName}' : o.optionName)
-      .join(' • ');
+  /// Whether this dish can still be called served: the kitchen has been asked for it and it has
+  /// not been brought out yet. Any stage on the way counts, since a branch without a kitchen screen
+  /// never moves a dish past SENT.
+  bool get canBeServed => const {'SENT', 'PREPARING', 'READY'}.contains(kitchenStatus?.toUpperCase());
 
   factory OrderLine.fromJson(Map<String, dynamic> json) => OrderLine(
         orderItemId: asString(json['order_item_id']),

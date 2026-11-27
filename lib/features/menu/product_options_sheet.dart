@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -5,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/l10n/strings.dart';
 import '../../core/network/api_failure.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/fitted_amount.dart';
 import '../../core/widgets/quantity_stepper.dart';
 import '../../core/widgets/states.dart';
 import '../../data/dto/cart_line.dart';
@@ -38,7 +41,11 @@ class _ProductOptionsSheet extends ConsumerStatefulWidget {
 
 class _ProductOptionsSheetState extends ConsumerState<_ProductOptionsSheet> {
   final _noteController = TextEditingController();
+  final _noteFocus = FocusNode();
+  final _sheet = DraggableScrollableController();
   final _uuid = const Uuid();
+
+  static const _maxSize = 0.95;
 
   MenuSku? _sku;
   // group id → chosen option ids, in the order they were tapped.
@@ -47,9 +54,26 @@ class _ProductOptionsSheetState extends ConsumerState<_ProductOptionsSheet> {
   bool _initialised = false;
 
   @override
+  void initState() {
+    super.initState();
+    _noteFocus.addListener(_makeRoomForNote);
+  }
+
+  @override
   void dispose() {
     _noteController.dispose();
+    _noteFocus.dispose();
+    _sheet.dispose();
     super.dispose();
+  }
+
+  /// The keyboard takes much of the screen, so while the note is being typed the sheet takes all
+  /// of what is left. The text field then scrolls itself into view.
+  void _makeRoomForNote() {
+    if (!_noteFocus.hasFocus || !_sheet.isAttached) return;
+    unawaited(
+      _sheet.animateTo(_maxSize, duration: const Duration(milliseconds: 250), curve: Curves.easeOut),
+    );
   }
 
   /// Preselects the default SKU and every group's default options, so a dish whose defaults are
@@ -134,24 +158,29 @@ class _ProductOptionsSheetState extends ConsumerState<_ProductOptionsSheet> {
     final t = ref.watch(stringsProvider);
     final detail = ref.watch(productDetailProvider(widget.product.id));
 
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.75,
-      maxChildSize: 0.95,
-      builder: (context, scrollController) => switch (detail) {
-        AsyncError(:final error) => Padding(
-            padding: const EdgeInsets.all(24),
-            child: ErrorView(
-              failure: error is ApiFailure
-                  ? error
-                  : ApiFailure(code: 'UNKNOWN', message: error.toString()),
-              retryLabel: t('common.retry'),
-              onRetry: () => ref.invalidate(productDetailProvider(widget.product.id)),
+    // A modal sheet is not moved out of the keyboard's way by itself.
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: DraggableScrollableSheet(
+        controller: _sheet,
+        expand: false,
+        initialChildSize: 0.75,
+        maxChildSize: _maxSize,
+        builder: (context, scrollController) => switch (detail) {
+          AsyncError(:final error) => Padding(
+              padding: const EdgeInsets.all(24),
+              child: ErrorView(
+                failure: error is ApiFailure
+                    ? error
+                    : ApiFailure(code: 'UNKNOWN', message: error.toString()),
+                retryLabel: t('common.retry'),
+                onRetry: () => ref.invalidate(productDetailProvider(widget.product.id)),
+              ),
             ),
-          ),
-        AsyncData(:final value) => _body(context, t, value, scrollController),
-        _ => const SizedBox(height: 240, child: LoadingView()),
-      },
+          AsyncData(:final value) => _body(context, t, value, scrollController),
+          _ => const SizedBox(height: 240, child: LoadingView()),
+        },
+      ),
     );
   }
 
@@ -223,7 +252,8 @@ class _ProductOptionsSheetState extends ConsumerState<_ProductOptionsSheet> {
                       _Chip(
                         label: option.priceAdjustment == 0
                             ? option.optionName
-                            : '${option.optionName} +${t.money(option.priceAdjustment)}',
+                            : '${option.optionName} ${option.priceAdjustment > 0 ? '+' : ''}'
+                                '${t.money(option.priceAdjustment)}',
                         selected: _isChosen(group, option),
                         onTap: () => _toggle(group, option),
                       ),
@@ -235,6 +265,9 @@ class _ProductOptionsSheetState extends ConsumerState<_ProductOptionsSheet> {
               const SizedBox(height: 8),
               TextField(
                 controller: _noteController,
+                focusNode: _noteFocus,
+                textInputAction: TextInputAction.done,
+                onTapOutside: (_) => _noteFocus.unfocus(),
                 maxLength: 200,
                 decoration: InputDecoration(
                   hintText: t('menu.notePlaceholder'),
@@ -256,9 +289,18 @@ class _ProductOptionsSheetState extends ConsumerState<_ProductOptionsSheet> {
               const SizedBox(width: 14),
               Expanded(
                 child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  ),
                   onPressed: canAdd ? () => _add(detail) : null,
-                  child: Text(
-                    '${t('menu.addToCart')} · ${t.money(_unitPrice(detail) * _quantity)}',
+                  // On one line where there is room, otherwise the amount under the words.
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 10,
+                    children: [
+                      FittedBox(fit: BoxFit.scaleDown, child: Text(t('menu.addToCart'), maxLines: 1)),
+                      FittedAmount(t.money(_unitPrice(detail) * _quantity)),
+                    ],
                   ),
                 ),
               ),

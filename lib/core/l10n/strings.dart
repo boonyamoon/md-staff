@@ -66,6 +66,7 @@ class AppStrings {
   static const Map<String, String> _failureKeys = {
     'TABLE_HAS_ORDER': 'error.tableHasOrder',
     'TABLE_SESSION_CHANGED': 'error.tableChanged',
+    'ORDER_ITEM_NOT_ON_TABLE': 'error.tableChanged',
     'TABLE_NOT_OPEN': 'error.tableChanged',
     'TABLE_NOT_MERGED': 'error.tableChanged',
     'TABLE_NOT_AVAILABLE': 'error.tableChanged',
@@ -112,18 +113,15 @@ class AppStrings {
     return sameDay ? clock : '${at.day}/${at.month} $clock';
   }
 
-  /// Money, formatted the way the POS prints it: no decimals when the amount is whole.
+  /// Money, always with two decimals: `1,250.00`.
   String money(num amount) {
-    final rounded = (amount * 100).round() / 100;
-    final text = rounded == rounded.roundToDouble()
-        ? rounded.toStringAsFixed(0)
-        : rounded.toStringAsFixed(2);
-    final parts = text.split('.');
+    // Rounded first, so that a stray fraction below zero cannot print as "-0.00".
+    final parts = ((amount * 100).round() / 100).toStringAsFixed(2).split('.');
     final digits = parts.first.replaceAllMapped(
       RegExp(r'(\d)(?=(\d{3})+$)'),
       (m) => '${m[1]},',
     );
-    return parts.length > 1 ? '$digits.${parts[1]}' : digits;
+    return '$digits.${parts.last}';
   }
 
   static const Map<String, String> _th = {
@@ -215,6 +213,10 @@ class AppStrings {
     'kitchen.cancelled': 'ยกเลิก',
     'bill.title': 'รายการที่สั่งแล้ว',
     'bill.empty': 'โต๊ะนี้ยังไม่มีรายการ',
+    'bill.serve': 'เสิร์ฟ',
+    'bill.serveAll': 'เสิร์ฟทั้งหมด',
+    'bill.serveAllTitle': 'เสิร์ฟทั้งหมดของรอบที่ {0}?',
+    'bill.serveAllBody': '{0} รายการจะเปลี่ยนเป็นเสิร์ฟแล้ว และเปลี่ยนกลับไม่ได้',
     'bill.round': 'รอบที่',
     'bill.subtotal': 'ยอดรวม',
     'bill.discount': 'ส่วนลด',
@@ -224,6 +226,7 @@ class AppStrings {
     'bill.payAtPos': 'ชำระเงินที่เครื่อง POS เท่านั้น',
     'bill.orderNumber': 'เลขที่ออเดอร์',
     'settings.title': 'ตั้งค่า',
+    'settings.account': 'บัญชีและเครื่อง',
     'settings.language': 'ภาษา',
     'settings.terminal': 'เครื่อง',
     'settings.branch': 'สาขา',
@@ -387,6 +390,10 @@ class AppStrings {
     'kitchen.cancelled': 'Cancelled',
     'bill.title': 'Already ordered',
     'bill.empty': 'Nothing ordered at this table yet',
+    'bill.serve': 'Serve',
+    'bill.serveAll': 'Serve all',
+    'bill.serveAllTitle': 'Serve everything in round {0}?',
+    'bill.serveAllBody': 'Items to be marked served: {0}. This cannot be undone.',
     'bill.round': 'Round',
     'bill.subtotal': 'Subtotal',
     'bill.discount': 'Discount',
@@ -396,6 +403,7 @@ class AppStrings {
     'bill.payAtPos': 'Payment is taken at the POS only',
     'bill.orderNumber': 'Order',
     'settings.title': 'Settings',
+    'settings.account': 'Account and device',
     'settings.language': 'Language',
     'settings.terminal': 'Terminal',
     'settings.branch': 'Branch',

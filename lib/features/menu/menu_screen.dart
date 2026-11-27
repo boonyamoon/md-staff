@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/l10n/strings.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/fitted_amount.dart';
 import '../../core/widgets/product_thumb.dart';
 import '../../core/widgets/stale_banner.dart';
 import '../../core/widgets/states.dart';
@@ -387,23 +388,36 @@ class _ProductRow extends StatelessWidget {
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 4),
-                      Row(
+                      // "Sold out" drops below the price where there is no room beside it.
+                      Wrap(
+                        spacing: 10,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          Text(
-                            t.money(price),
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: Theme.of(context).colorScheme.primaryStrong,
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text.rich(
+                              TextSpan(
+                                text: t.money(price),
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: Theme.of(context).colorScheme.primaryStrong,
+                                ),
+                                children: [
+                                  if (product.hasMultipleSkus)
+                                    const TextSpan(
+                                      text: ' +',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w400,
+                                        color: MeedColors.inkSoft,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              maxLines: 1,
                             ),
                           ),
-                          if (product.hasMultipleSkus)
-                            const Text(
-                              ' +',
-                              style: TextStyle(fontSize: 15, color: MeedColors.inkSoft),
-                            ),
-                          if (soldOut) ...[
-                            const SizedBox(width: 10),
+                          if (soldOut)
                             Text(
                               t('menu.soldOut'),
                               style: const TextStyle(
@@ -412,7 +426,6 @@ class _ProductRow extends StatelessWidget {
                                 color: MeedColors.danger,
                               ),
                             ),
-                          ],
                         ],
                       ),
                     ],
@@ -451,12 +464,17 @@ class _CartBar extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
           child: FilledButton(
             onPressed: onTap,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('${t('cart.title')} · $itemCount ${t('common.items')}'),
-                Text(t.money(total)),
-              ],
+            // The total takes its own line where it does not fit beside the title.
+            child: SizedBox(
+              width: double.infinity,
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                spacing: 12,
+                children: [
+                  Text('${t('cart.title')} · $itemCount ${t('common.items')}'),
+                  FittedAmount(t.money(total)),
+                ],
+              ),
             ),
           ),
         ),

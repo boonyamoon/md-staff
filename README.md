@@ -21,6 +21,8 @@
 - **พิมพ์ออเดอร์อัตโนมัติที่ POS:** ออเดอร์ที่ส่งจากแอปนี้สร้าง kitchen print job บนเซิร์ฟเวอร์
   เครื่อง POS ที่เฝ้าอยู่จะ claim แล้วพิมพ์ให้เอง แอปนี้ไม่ต่อเครื่องพิมพ์เลย
 - **ดูบิล:** เห็นรายการที่สั่งแล้วแยกตามรอบ พร้อมยอดสุทธิ แต่ยกเลิก/ลดราคา/รับเงิน ทำที่ POS
+- **เสิร์ฟแล้ว:** ในหน้ารายการที่สั่ง กดได้ทีละรายการหรือทั้งรอบ (ถามยืนยันก่อน) ตั้งแต่
+  "ส่งเข้าครัวแล้ว" เพราะบางร้านไม่มีจอครัว ไม่ต้องถือสิทธิ์โต๊ะ และเปลี่ยนกลับไม่ได้
 - **ภาษา:** ไทยและอังกฤษ
 - **รองรับเฉพาะมือถือแนวตั้ง** iPhone และ Android (ล็อกไว้ทั้งใน manifest, Info.plist และใน `main.dart`)
 
@@ -148,7 +150,7 @@ lib/
 |---|---|
 | staff JWT (ตอนเข้าสู่ระบบ อยู่ในหน่วยความจำเท่านั้น) | `POST /api/v1/auth/login`, `GET /api/v1/branches-access/snapshot?platform=staff_app`, `GET /api/v1/staff-app/pairing/terminals`, `POST /api/v1/staff-app/login` |
 | refresh token (อยู่ใน body ไม่มี bearer) | `POST /api/v1/staff-app/token/refresh` |
-| access token | `GET /session`, `POST /logout`, `GET /config`, `GET /zones`, `GET /tables/:id`, `POST /tables/:id/claim`, `POST /tables/:id/claim/renew`, `POST /tables/:id/claim/release`, `POST /tables/:id/orders`, `GET /menu/*` |
+| access token | `GET /session`, `POST /logout`, `GET /config`, `GET /zones`, `GET /tables/:id`, `POST /tables/:id/claim`, `POST /tables/:id/claim/renew`, `POST /tables/:id/claim/release`, `POST /tables/:id/orders`, `POST /tables/:id/served`, `GET /menu/*` |
 
 `POST /api/v1/staff-app/login` ผูกเครื่อง**และ**ออก token ในขั้นเดียว
 

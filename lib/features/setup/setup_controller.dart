@@ -105,14 +105,15 @@ class SetupController extends Notifier<SetupState> {
   @override
   SetupState build() {
     ref.onDispose(() => _staffToken = null);
-    // Prefill the device name with the phone's own model; a manager can rename it.
+    // Prefill the device name with the phone's own model; a manager can rename it. When the form
+    // is being started over after a sign-out, the name is already known.
     ref.listen(deviceNameProvider, (previous, next) {
       final name = next.value;
       if (name != null && state.deviceName.isEmpty) {
         state = state.copyWith(deviceName: name);
       }
-    }, fireImmediately: true);
-    return const SetupState();
+    });
+    return SetupState(deviceName: ref.read(deviceNameProvider).value ?? '');
   }
 
   void emailChanged(String value) => state = state.copyWith(

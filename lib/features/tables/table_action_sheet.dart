@@ -764,11 +764,14 @@ class _BigButton extends StatelessWidget {
               children: [
                 Text(label, maxLines: 1, style: const TextStyle(height: 1.2)),
                 if (detail != null)
-                  Text(
-                    detail!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 15, height: 1.2),
+                  // An amount, which may be shrunk to fit but never cut short.
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      detail!,
+                      maxLines: 1,
+                      style: const TextStyle(fontSize: 15, height: 1.2),
+                    ),
                   ),
               ],
             ),

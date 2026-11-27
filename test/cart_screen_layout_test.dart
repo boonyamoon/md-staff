@@ -42,11 +42,11 @@ void main() {
     expect(find.text('จำนวนลูกค้า'), findsOneWidget);
     expect(find.text('2'), findsOneWidget);
     expect(product, findsOneWidget);
-    expect(find.text('53'), findsNWidgets(2));
+    expect(find.text('53.00'), findsNWidgets(2));
     expect(send, findsOneWidget);
     expect(tester.getTopLeft(product).dy, greaterThan(0));
     expect(
-      tester.getTopLeft(find.text('53').last).dy,
+      tester.getTopLeft(find.text('53.00').last).dy,
       greaterThan(tester.getBottomLeft(product).dy),
     );
     expect(

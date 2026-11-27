@@ -40,5 +40,11 @@ class _SyncOnResumeState extends ConsumerState<SyncOnResume> {
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    // Followed for as long as the app runs. Left to itself it is only brought up to date when a
+    // screen next asks, which after signing in again is while that screen is being built — too late
+    // to tell the floor and the menu that the branch is back.
+    ref.listen(signedInBranchProvider, (_, _) {});
+    return widget.child;
+  }
 }

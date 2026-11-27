@@ -24,6 +24,19 @@ class FloorRepository {
     return TableDetail.fromJson(envelopeData(body));
   }
 
+  /// Marks dishes as brought to the table. Needs no claim, and asking twice changes nothing.
+  /// Refused when the table no longer seats the party named by [sessionId].
+  Future<void> markServed(
+    String floorItemId, {
+    required String sessionId,
+    required List<String> orderItemIds,
+  }) async {
+    await _api.post(
+      'api/v1/staff-app/tables/$floorItemId/served',
+      body: {'session_id': sessionId, 'order_item_ids': orderItemIds},
+    );
+  }
+
   /// Takes the table. Without [managerPin] this fails with TABLE_CLAIM_HELD when another handset
   /// is on it; with a valid manager PIN it takes it over and reports who it was taken from.
   Future<TableClaim> claim(String floorItemId, {String? managerPin}) async {

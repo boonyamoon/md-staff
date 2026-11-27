@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/network/api_client.dart';
+import '../../core/network/api_failure.dart';
 import '../../core/providers.dart';
 import '../../core/storage/credential_store.dart';
 import '../../data/dto/session_dto.dart';
+import '../setup/setup_controller.dart';
 
 /// Where the app is allowed to be. There are only three, because a handset's sign-in is
 /// permanent: once signed in it stays signed in until someone ends it.
@@ -89,8 +91,10 @@ class AppSessionController extends Notifier<AppSession> {
   Future<void> signOut() async {
     try {
       await ref.read(sessionRepositoryProvider).logout();
+    } on ApiFailure {
+      // The handset is signed out all the same: there may simply be no signal.
     } finally {
-      state = const AppSession(phase: AppPhase.needsLogin);
+      _toSignIn();
       unawaited(ref.read(localCacheProvider).clear());
     }
   }
@@ -100,8 +104,15 @@ class AppSessionController extends Notifier<AppSession> {
       case SessionEvent.signedOut:
         unawaited(ref.read(credentialStoreProvider).clear());
         unawaited(ref.read(localCacheProvider).clear());
-        state = const AppSession(phase: AppPhase.needsLogin, notice: 'login.signedOut');
+        _toSignIn(notice: 'login.signedOut');
     }
+  }
+
+  /// To an empty sign-in form. Nothing of the last sign-in — the step it ended on, the account's
+  /// branches, the chosen branch's colour — is left for whoever picks the phone up next.
+  void _toSignIn({String? notice}) {
+    ref.invalidate(setupControllerProvider);
+    state = AppSession(phase: AppPhase.needsLogin, notice: notice);
   }
 
   /// Clears the one-shot notice after a screen has shown it.

@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/l10n/strings.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/fitted_amount.dart';
+import '../../core/widgets/option_lines.dart';
 import '../../core/widgets/product_thumb.dart';
 import '../../core/widgets/quantity_stepper.dart';
 import '../../core/widgets/states.dart';
@@ -228,9 +230,12 @@ class _CartRow extends StatelessWidget {
                       ),
                     if (line.options.isNotEmpty) ...[
                       const SizedBox(height: 2),
-                      Text(
-                        line.optionsLabel,
-                        style: const TextStyle(fontSize: 13.5, color: MeedColors.inkSoft),
+                      OptionLines(
+                        options: [
+                          for (final o in line.options)
+                            (name: o.optionName, quantity: o.quantity, price: o.total),
+                        ],
+                        t: t,
                       ),
                     ],
                     if (line.note != null && line.note!.isNotEmpty) ...[
@@ -259,10 +264,12 @@ class _CartRow extends StatelessWidget {
                           onChanged: onQuantityChanged,
                           compact: true,
                         ),
-                        const Spacer(),
-                        Text(
-                          t.money(line.lineTotal),
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: FittedAmount(
+                            t.money(line.lineTotal),
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                          ),
                         ),
                       ],
                     ),
@@ -310,10 +317,12 @@ class _SendBar extends StatelessWidget {
                   '$itemCount ${t('common.items')}',
                   style: const TextStyle(fontSize: 14.5, color: MeedColors.inkSoft),
                 ),
-                const Spacer(),
-                Text(
-                  t.money(total),
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FittedAmount(
+                    t.money(total),
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                  ),
                 ),
               ],
             ),

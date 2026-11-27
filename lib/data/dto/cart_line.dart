@@ -59,10 +59,6 @@ class CartLine {
 
   num get lineTotal => unitPrice * quantity;
 
-  String get optionsLabel => options
-      .map((o) => o.quantity > 1 ? 'x${o.quantity} ${o.optionName}' : o.optionName)
-      .join(' • ');
-
   /// Two lines merge only when the product, SKU, options and note all match — otherwise "no
   /// chilli" on one of three identical bowls would be lost.
   String get mergeKey {

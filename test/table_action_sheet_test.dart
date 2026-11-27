@@ -142,7 +142,7 @@ void main() {
     expect(find.text('วันนี้ 12:00 (5 นาที)'), findsOneWidget);
     expect(find.text('รออาหาร'), findsOneWidget);
     expect(find.text('4 คน'), findsOneWidget);
-    expect(find.text('฿ 1,250'), findsOneWidget);
+    expect(find.text('฿ 1,250.00'), findsOneWidget);
     expect(find.text('สั่งเพิ่ม'), findsOneWidget);
     expect(find.text('แยกโต๊ะ'), findsNothing);
     verify(() => floor.table('A1')).called(1);
@@ -156,7 +156,7 @@ void main() {
 
     expect(find.text('ยังไม่ได้สั่งอาหาร'), findsOneWidget);
     expect(find.text('สั่งอาหาร'), findsNWidgets(2));
-    expect(find.text('฿ 0'), findsOneWidget);
+    expect(find.text('฿ 0.00'), findsOneWidget);
   });
 
   testWidgets('ordering claims the table, keeps it, and goes to the menu', (tester) async {
