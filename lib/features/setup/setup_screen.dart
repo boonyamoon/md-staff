@@ -288,7 +288,8 @@ class _TerminalStep extends StatelessWidget {
               else ...[
                 _ChoiceCard(
                   title: t('setup.autoTerminal'),
-                  subtitle: free.isEmpty ? t('setup.noTerminal') : null,
+                  // With none free, signing in still works: the server takes over the idlest one.
+                  subtitle: free.isEmpty ? t('setup.allTaken') : null,
                   selected: state.selectedTerminalId == null,
                   onTap: () => onSelectTerminal(null),
                 ),
@@ -298,7 +299,7 @@ class _TerminalStep extends StatelessWidget {
                     title: '${terminal.terminalName} (${terminal.terminalCode})',
                     subtitle: terminal.isPaired
                         ? '${t('setup.terminalTaken')}${terminal.deviceName == null ? '' : ' • ${terminal.deviceName}'}'
-                        : null,
+                        : t('setup.terminalFree'),
                     selected: state.selectedTerminalId == terminal.terminalId,
                     enabled: !terminal.isPaired,
                     onTap: () => onSelectTerminal(terminal.terminalId),
